@@ -1,5 +1,8 @@
 import { LocalStorageAdapter } from "../data/localAdapter.js";
+import { CloudStorageAdapter, SupabaseStateGateway } from "../data/cloudAdapter.js";
 import { StudyHubRepository } from "../data/repository.js";
+import { mountAuthGate } from "../cloud/authGate.js";
+import { StudyHubAuth, createStudyHubSupabaseClient, readSupabaseConfig } from "../cloud/supabase.js";
 import { createRouter } from "../router.js";
 import { createStore } from "../state/store.js";
 import { TimerController } from "../timer/timerController.js";
@@ -9,7 +12,7 @@ import { focusView } from "../views/focusView.js";
 import { projectView } from "../views/projectView.js";
 import { projectsView } from "../views/projectsView.js";
 import { registerStudyHubTools } from "../webmcp.js";
-import { brand, confirmDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
+import { brand, confirmDialog, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
 import { icon } from "./icons.js";
 
 function initialUiState() {
@@ -27,6 +30,7 @@ function initialUiState() {
     reflectionDraft: null,
     settingsOpen: false,
     dimTheme: false,
+    syncStatus: { state: "local", pending: false, message: "Guardado en este dispositivo" },
     toasts: [],
   };
 }
@@ -40,13 +44,16 @@ function shellSidebar(state, route, ui) {
   return `<aside class="sidebar project-sidebar">${brand()}<label class="sidebar-search">${icon("search", 19)}<span class="sr-only">Buscar proyectos</span><input type="search" data-input="project-search" value="${escapeHtml(ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><nav class="project-nav" aria-label="Tus proyectos">${filtered.map((project) => `<a href="#/projects/${encodeURIComponent(project.id)}" aria-label="${escapeHtml(project.name)}" class="${project.id === route.projectId ? "active" : ""}" style="--project:${escapeHtml(project.color)}"><span>${icon(project.icon, 22)}</span><strong>${escapeHtml(project.name)}</strong></a>`).join("")}</nav><button class="sidebar-create" type="button" data-action="new-project">${icon("plus", 19)} Nuevo proyecto</button></aside>`;
 }
 
-function settingsMenu(state) {
-  return `<div class="floating-menu settings-menu" role="menu"><div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>Datos guardados en este dispositivo</small></div></div><button type="button" role="menuitem" data-action="export-backup">${icon("download", 18)} Exportar copia JSON</button><button type="button" role="menuitem" data-action="import-backup">${icon("upload", 18)} Importar copia JSON</button><button type="button" role="menuitem" class="danger-text" data-action="reset-data">${icon("trash", 18)} Limpiar todos los datos</button></div>`;
+function settingsMenu(state, account, syncStatus) {
+  const cloudProfile = account
+    ? `<div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>${escapeHtml(account.email || "Cuenta StudyHub")}</small><small class="sync-state sync-${escapeHtml(syncStatus.state)}" data-sync-state>${escapeHtml(syncStatus.message)}</small></div></div>`
+    : `<div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>Modo local</small></div></div>`;
+  return `<div class="floating-menu settings-menu" role="menu">${cloudProfile}${account && (syncStatus.pending || syncStatus.state === "error") ? `<button type="button" role="menuitem" data-action="sync-now">${icon("upload", 18)} Sincronizar ahora</button>` : ""}<button type="button" role="menuitem" data-action="export-backup">${icon("download", 18)} Exportar copia JSON</button><button type="button" role="menuitem" data-action="import-backup">${icon("upload", 18)} Importar copia JSON</button><button type="button" role="menuitem" class="danger-text" data-action="reset-data">${icon("trash", 18)} Limpiar todos los datos</button>${account ? `<button type="button" role="menuitem" data-action="sign-out">${icon("logOut", 18)} Cerrar sesión</button>` : ""}</div>`;
 }
 
-function shellTopbar(state, route, ui) {
+function shellTopbar(state, route, ui, account) {
   const dashboard = route.name === "projects";
-  return `<header class="topbar"><label class="search-field">${icon("search")}<span class="sr-only">${dashboard ? "Buscar proyectos" : "Buscar en tus proyectos"}</span><input type="search" data-input="${dashboard ? "search" : "project-search"}" value="${escapeHtml(dashboard ? ui.search : ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><button class="icon-button theme-button" type="button" data-action="toggle-theme" aria-label="Cambiar intensidad del tema">${icon(ui.dimTheme ? "moon" : "sun")}</button><div class="settings-wrap"><button class="avatar" type="button" data-action="open-settings" aria-haspopup="menu" aria-expanded="${ui.settingsOpen}" aria-label="Copias y ajustes">SH</button>${ui.settingsOpen ? settingsMenu(state) : ""}</div></header>`;
+  return `<header class="topbar"><label class="search-field">${icon("search")}<span class="sr-only">${dashboard ? "Buscar proyectos" : "Buscar en tus proyectos"}</span><input type="search" data-input="${dashboard ? "search" : "project-search"}" value="${escapeHtml(dashboard ? ui.search : ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><button class="icon-button theme-button" type="button" data-action="toggle-theme" aria-label="Cambiar intensidad del tema">${icon(ui.dimTheme ? "moon" : "sun")}</button><div class="settings-wrap"><button class="avatar" type="button" data-action="open-settings" aria-haspopup="menu" aria-expanded="${ui.settingsOpen}" aria-label="Copias y ajustes">SH</button>${ui.settingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div></header>`;
 }
 
 function toastRegion(toasts) {
@@ -54,16 +61,26 @@ function toastRegion(toasts) {
 }
 
 class StudyHubApp {
-  constructor(root, repository, store, router) {
+  constructor(root, repository, store, router, context = {}) {
     this.root = root;
     this.repository = repository;
     this.store = store;
     this.router = router;
+    this.account = context.account ?? null;
+    this.auth = context.auth ?? null;
+    this.adapter = context.adapter ?? repository.adapter;
+    this.migrationCandidate = context.migrationCandidate ?? null;
     this.ui = initialUiState();
+    if (this.adapter?.getStatus) this.ui.syncStatus = this.adapter.getStatus();
     this.toastCounter = 0;
     this.busy = false;
     this.searchTimer = null;
     this.lastRouteKey = null;
+    this.unsubscribeStore = () => {};
+    this.unsubscribeRouter = () => {};
+    this.unsubscribeStatus = () => {};
+    this.unsubscribeAuth = () => {};
+    this.toolsCleanup = () => {};
     this.timer = new TimerController(repository, (snapshot) => this.updateTimer(snapshot));
     this.onClick = (event) => this.handleClick(event);
     this.onInput = (event) => this.handleInput(event);
@@ -80,15 +97,47 @@ class StudyHubApp {
     this.root.addEventListener("submit", this.onSubmit);
     this.root.addEventListener("keydown", this.onKeydown);
     this.root.addEventListener("cancel", this.onCancel);
-    this.store.subscribe(() => this.render());
-    this.router.subscribe(() => {
+    this.unsubscribeStore = this.store.subscribe(() => this.render());
+    this.unsubscribeRouter = this.router.subscribe(() => {
       this.ui.menu = null;
       this.ui.selectedDate = null;
       globalThis.scrollTo?.({ top: 0, behavior: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       this.render();
     });
+    this.unsubscribeStatus = this.adapter?.subscribeStatus?.((status) => {
+      this.ui.syncStatus = status;
+      const node = this.root.querySelector("[data-sync-state]");
+      if (node) {
+        node.textContent = status.message;
+        node.className = `sync-state sync-${status.state}`;
+      }
+    }) ?? (() => {});
+    this.unsubscribeAuth = this.auth?.subscribe?.((event) => {
+      if (event === "SIGNED_OUT") globalThis.location?.reload?.();
+    }) ?? (() => {});
     this.timer.start();
     this.render();
+  }
+
+  setToolsCleanup(cleanup) {
+    this.toolsCleanup = cleanup ?? (() => {});
+  }
+
+  destroy() {
+    this.timer.stop();
+    this.unsubscribeStore();
+    this.unsubscribeRouter();
+    this.unsubscribeStatus();
+    this.unsubscribeAuth();
+    this.toolsCleanup();
+    this.repository.destroy();
+    this.router.destroy();
+    this.root.removeEventListener("click", this.onClick);
+    this.root.removeEventListener("input", this.onInput);
+    this.root.removeEventListener("change", this.onChange);
+    this.root.removeEventListener("submit", this.onSubmit);
+    this.root.removeEventListener("keydown", this.onKeydown);
+    this.root.removeEventListener("cancel", this.onCancel);
   }
 
   addToast(message, type = "success") {
@@ -170,13 +219,13 @@ class StudyHubApp {
     const editingProject = this.ui.dialog?.type === "project" ? { ...(storedProject ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const pendingTask = state.pendingCompletion ? state.tasks.find((item) => item.id === state.pendingCompletion.taskId) : null;
-    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui)}<main class="workspace">${shellTopbar(state, route, this.ui)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.ui.reflectionDraft ?? {}, state.pendingCompletion) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.ui.reflectionDraft ?? {}, state.pendingCompletion) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
     this.openPendingDialog();
     this.timer.renderNow();
   }
 
   openPendingDialog() {
-    const selector = this.repository.getState().pendingCompletion ? "#reflection-dialog" : this.ui.confirm ? "#confirm-dialog" : this.ui.dialog?.type === "project" ? "#project-dialog" : this.ui.dialog?.type === "task" ? "#task-dialog" : null;
+    const selector = this.migrationCandidate ? "#migration-dialog" : this.repository.getState().pendingCompletion ? "#reflection-dialog" : this.ui.confirm ? "#confirm-dialog" : this.ui.dialog?.type === "project" ? "#project-dialog" : this.ui.dialog?.type === "task" ? "#task-dialog" : null;
     if (!selector) return;
     requestAnimationFrame(() => {
       const dialog = this.root.querySelector(selector);
@@ -286,12 +335,32 @@ class StudyHubApp {
         });
         break;
       }
+      case "migrate-local": await this.safely(async () => {
+        const candidate = this.migrationCandidate;
+        if (!candidate) return;
+        await this.repository.replaceFromMigration(candidate);
+        this.migrationCandidate = null;
+        this.addToast("Tus datos locales se migraron a la nube.");
+      }); break;
+      case "skip-migration": await this.safely(async () => {
+        await this.repository.persistCurrentState();
+        this.migrationCandidate = null;
+        this.addToast("Se creó un espacio nuevo. La copia local anterior se conservó.");
+      }); break;
+      case "sync-now": await this.safely(async () => {
+        const result = await this.repository.syncNow();
+        this.addToast(result?.synced ? "Datos sincronizados." : "La sincronización sigue pendiente.", result?.synced ? "success" : "error");
+      }); break;
+      case "sign-out": await this.safely(async () => {
+        await this.auth?.signOut();
+        globalThis.location?.reload?.();
+      }); break;
       case "close-dialog": this.ui.dialog = null; this.render(); break;
       case "open-settings": this.ui.settingsOpen = !this.ui.settingsOpen; this.ui.menu = null; this.render(); break;
       case "toggle-theme": this.ui.dimTheme = !this.ui.dimTheme; this.render(); break;
       case "export-backup": this.exportBackup(); this.ui.settingsOpen = false; this.render(); break;
       case "import-backup": this.ui.settingsOpen = false; this.root.querySelector("#backup-file")?.click(); break;
-      case "reset-data": this.ui.confirm = { type: "reset", title: "¿Empezar desde cero?", message: "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de este dispositivo.", confirmLabel: "Limpiar datos" }; this.ui.settingsOpen = false; this.render(); break;
+      case "reset-data": this.ui.confirm = { type: "reset", title: "¿Empezar desde cero?", message: this.account ? "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de esta cuenta en la nube y en este dispositivo." : "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de este dispositivo.", confirmLabel: "Limpiar datos" }; this.ui.settingsOpen = false; this.render(); break;
       case "cancel-confirm": this.ui.confirm = null; this.ui.pendingImport = null; this.render(); break;
       case "confirm-action": await this.confirmAction(); break;
       case "dismiss-toast": this.ui.toasts = this.ui.toasts.filter((toast) => toast.id !== target.dataset.toastId); this.renderToasts(); break;
@@ -453,6 +522,10 @@ class StudyHubApp {
   }
 
   handleDialogCancel(event) {
+    if (event.target.id === "migration-dialog") {
+      event.preventDefault();
+      return;
+    }
     if (event.target.id === "reflection-dialog") {
       event.preventDefault();
       const reflectionKind = this.repository.getState().pendingCompletion?.kind ?? "completion";
@@ -469,15 +542,55 @@ class StudyHubApp {
   }
 }
 
-export async function createApp(root) {
-  if (!root) throw new Error("No se encontró el contenedor de StudyHub.");
+async function mountStudyHub(root, { adapter, account = null, auth = null }) {
   const store = createStore(null);
-  const repository = new StudyHubRepository({ adapter: new LocalStorageAdapter(), store });
+  const repository = new StudyHubRepository({ adapter, store });
   const init = await repository.initialize();
   const router = createRouter();
-  const app = new StudyHubApp(root, repository, store, router);
+  const app = new StudyHubApp(root, repository, store, router, {
+    account,
+    auth,
+    adapter,
+    migrationCandidate: init.migrationCandidate ?? null,
+  });
   app.mount();
-  registerStudyHubTools(repository, router, (message, type) => app.addToast(message, type));
+  app.setToolsCleanup(registerStudyHubTools(repository, router, (message, type) => app.addToast(message, type)));
   if (init.recovery) app.addToast(init.recovery, "error");
   return app;
+}
+
+export async function createApp(root, dependencies = {}) {
+  if (!root) throw new Error("No se encontró el contenedor de StudyHub.");
+  const config = dependencies.config === undefined ? readSupabaseConfig() : dependencies.config;
+  const client = dependencies.client ?? (config ? createStudyHubSupabaseClient(config) : null);
+  if (!client) return mountStudyHub(root, { adapter: dependencies.localAdapter ?? new LocalStorageAdapter() });
+
+  const auth = dependencies.auth ?? new StudyHubAuth(client);
+  const mountCloudSession = async (session) => {
+    const userId = session?.user?.id;
+    if (!userId) throw new Error("La sesión de StudyHub no contiene un usuario válido.");
+    const gateway = dependencies.gatewayFactory
+      ? dependencies.gatewayFactory({ client, userId })
+      : new SupabaseStateGateway({ client, userId });
+    const adapter = dependencies.cloudAdapterFactory
+      ? dependencies.cloudAdapterFactory({ gateway, userId })
+      : new CloudStorageAdapter({ gateway, userId });
+    return mountStudyHub(root, {
+      adapter,
+      account: { id: userId, email: session.user.email ?? "" },
+      auth,
+    });
+  };
+
+  const session = dependencies.session ?? await auth.getSession();
+  if (session) return mountCloudSession(session);
+
+  let gate;
+  gate = mountAuthGate(root, auth, {
+    onAuthenticated: async (authenticatedSession) => {
+      gate?.destroy();
+      await mountCloudSession(authenticatedSession);
+    },
+  });
+  return gate;
 }

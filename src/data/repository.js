@@ -328,6 +328,23 @@ export class StudyHubRepository {
     this.store.setState(next);
   }
 
+  async replaceFromMigration(candidate) {
+    const next = prepareImportedState(candidate, this.clock());
+    await this.adapter.save(next);
+    this.store.setState(next);
+    return next;
+  }
+
+  async persistCurrentState() {
+    const current = this.getState();
+    await this.adapter.save(current);
+    return current;
+  }
+
+  async syncNow() {
+    return this.adapter.flush?.() ?? { data: null, synced: true };
+  }
+
   async resetAll() {
     const next = createEmptyState(this.clock());
     next.revision = this.getState().revision + 1;

@@ -28,7 +28,7 @@ La compilación queda en `dist/`.
 npm test
 ```
 
-Las pruebas automatizadas cubren el estado versionado, fechas/calendario, los modos con tiempo y sin límite, duraciones personalizadas, reconstrucción del cronómetro, pausa y reanudación, varias sesiones con sus reflexiones, prevención de doble conteo, finalización de tareas, recarga, eliminación en cascada y exportación/importación.
+Las pruebas automatizadas cubren el estado versionado, fechas/calendario, los modos con tiempo y sin límite, duraciones personalizadas, reconstrucción del cronómetro, pausa y reanudación, varias sesiones con sus reflexiones, prevención de doble conteo, finalización de tareas, recarga, eliminación en cascada, exportación/importación, migración local, trabajo sin conexión y aislamiento entre cuentas.
 
 ## Desplegar en Netlify
 
@@ -62,26 +62,37 @@ La navegación usa rutas hash (`#/projects/...`), por lo que una recarga directa
 
 ## Persistencia
 
-La fuente de verdad local está separada de la interfaz:
+La fuente de verdad está separada de la interfaz:
 
-- `LocalStorageAdapter` carga, guarda y mantiene una copia local anterior recuperable.
+- Con las variables de Supabase configuradas, `CloudStorageAdapter` sincroniza un snapshot atómico por usuario y conserva una caché/cola local independiente por cuenta.
+- Sin configuración cloud, `LocalStorageAdapter` mantiene el funcionamiento local compatible con la versión anterior.
 - El estado incluye `schemaVersion`, `revision` y `updatedAt` para migraciones futuras.
 - El repositorio concentra todas las operaciones de proyectos, tareas, sesiones y reflexiones.
 - El cronómetro guarda timestamps solo al iniciar, pausar, reanudar, detener o completar; los ticks visuales no escriben cada segundo.
 - Al exportar un cronómetro activo, la copia lo convierte en una instantánea pausada para evitar tiempo fantasma al restaurarla.
+- La importación JSON reemplaza el estado validado y lo sincroniza también con la nube.
+- Si no hay conexión, los cambios quedan en una cola local y se reintentan al volver a estar en línea.
 
-Los datos permanecen en el navegador y no se sincronizan entre dispositivos. Borrar el almacenamiento del navegador elimina la copia local, por eso conviene exportar respaldos periódicos.
+Los datos cloud se almacenan en Supabase Postgres y se recuperan al iniciar sesión desde otro dispositivo. El `localStorage` legado nunca se borra automáticamente: en el primer acceso a una cuenta cloud vacía, StudyHub pregunta si debe migrarlo.
 
-## Preparación para persistencia cloud
+## Configuración cloud
 
-La interfaz depende de `StudyHubRepository`, y el repositorio recibe un adaptador con `load`, `save` y `subscribe`. Para añadir persistencia cloud en Netlify se puede implementar otro adaptador sin reescribir las vistas.
+StudyHub utiliza Supabase Auth con correo y contraseña, y Row Level Security en Postgres. Cada usuario solo puede consultar o modificar su propia fila. El frontend usa exclusivamente la URL del proyecto y la clave pública publicable; no necesita claves administrativas ni la contraseña de la base de datos.
 
-Una versión cloud real debe añadir autenticación, autorización por usuario, resolución de conflictos y Netlify Functions que accedan a la base de datos. Esta primera versión no publica una función de escritura sin autenticación y no contiene secretos en el frontend. Las variables sensibles deben configurarse únicamente en el entorno de Netlify.
+Configura en desarrollo o Netlify:
+
+```env
+VITE_SUPABASE_URL=https://TU_PROYECTO.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REEMPLAZAR
+```
+
+La migración SQL y la guía completa están en `supabase/migrations/` y `docs/cloud-setup.md`. No incluyas claves `sb_secret_`, `service_role`, contraseñas ni tokens privados en variables `VITE_` o en el repositorio.
 
 ## Estructura principal
 
 ```text
 src/
+  cloud/         cliente de Supabase y acceso por correo/contraseña
   data/          esquema, adaptador local y repositorio
   state/         store y selectores derivados
   timer/         actualización visual del cronómetro

@@ -1,7 +1,30 @@
 import { createDemoState, normalizeState } from "./schema.js";
 
-const STORAGE_KEY = "studyhub:state:1";
-const BACKUP_KEY = "studyhub:state:1:last-known-good";
+export const STORAGE_KEY = "studyhub:state:1";
+export const BACKUP_KEY = "studyhub:state:1:last-known-good";
+
+export function readStoredState(storage = globalThis.localStorage, primaryKey = STORAGE_KEY, backupKey = BACKUP_KEY) {
+  const primary = storage?.getItem(primaryKey);
+  if (!primary) return { data: null, exists: false, recovery: null, error: null };
+  try {
+    return { data: normalizeState(JSON.parse(primary)), exists: true, recovery: null, error: null };
+  } catch (primaryError) {
+    const backup = storage?.getItem(backupKey);
+    if (backup) {
+      try {
+        return {
+          data: normalizeState(JSON.parse(backup)),
+          exists: true,
+          recovery: "Se restauró la última copia local válida.",
+          error: primaryError,
+        };
+      } catch {
+        // Continue with the invalid primary result below.
+      }
+    }
+    return { data: null, exists: true, recovery: null, error: primaryError };
+  }
+}
 
 export class LocalStorageAdapter {
   constructor(storage = globalThis.localStorage) {
@@ -9,21 +32,10 @@ export class LocalStorageAdapter {
   }
 
   async load() {
-    const primary = this.storage.getItem(STORAGE_KEY);
-    if (!primary) return { data: createDemoState(), recovery: null, isNew: true };
-    try {
-      return { data: normalizeState(JSON.parse(primary)), recovery: null, isNew: false };
-    } catch (primaryError) {
-      const backup = this.storage.getItem(BACKUP_KEY);
-      if (backup) {
-        try {
-          return { data: normalizeState(JSON.parse(backup)), recovery: "Se restauró la última copia local válida.", isNew: false };
-        } catch {
-          // Continue to a safe empty seed below.
-        }
-      }
-      return { data: createDemoState(), recovery: "Los datos locales no se pudieron leer. Se abrió una copia segura de demostración.", isNew: true, error: primaryError };
-    }
+    const stored = readStoredState(this.storage);
+    if (!stored.exists) return { data: createDemoState(), recovery: null, isNew: true };
+    if (stored.data) return { data: stored.data, recovery: stored.recovery, isNew: false };
+    return { data: createDemoState(), recovery: "Los datos locales no se pudieron leer. Se abrió una copia segura de demostración.", isNew: true, error: stored.error };
   }
 
   async save(nextState) {

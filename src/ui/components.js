@@ -137,3 +137,16 @@ export function reflectionDialog(task, draft = {}, pending = {}) {
 export function confirmDialog(confirmState) {
   return `<dialog class="app-dialog confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title"><div class="confirm-icon">${icon("trash", 25)}</div><h2 id="confirm-title">${escapeHtml(confirmState.title)}</h2><p>${escapeHtml(confirmState.message)}</p><div class="dialog-actions"><button class="secondary-button" type="button" data-action="cancel-confirm">Cancelar</button><button class="danger-button" type="button" data-action="confirm-action">${escapeHtml(confirmState.confirmLabel || "Eliminar")}</button></div></dialog>`;
 }
+
+export function migrationDialog(candidate) {
+  const projectCount = candidate?.projects?.length ?? 0;
+  const taskCount = candidate?.tasks?.length ?? 0;
+  return `<dialog class="app-dialog migration-dialog" id="migration-dialog" aria-labelledby="migration-title">
+    <div class="migration-icon">${icon("upload", 26)}</div>
+    <p class="eyebrow">Primera sincronización</p>
+    <h2 id="migration-title">Encontramos datos en este navegador</h2>
+    <p>Puedes subirlos a tu cuenta para recuperarlos en tus otros dispositivos. La copia local no se borrará.</p>
+    <div class="migration-summary"><span><strong>${projectCount}</strong> ${projectCount === 1 ? "proyecto" : "proyectos"}</span><span><strong>${taskCount}</strong> ${taskCount === 1 ? "tarea" : "tareas"}</span></div>
+    <div class="dialog-actions"><button class="secondary-button" type="button" data-action="skip-migration">Mantener espacio nuevo</button><button class="primary-button" type="button" data-action="migrate-local">${icon("upload", 18)} Migrar a la nube</button></div>
+  </dialog>`;
+}
