@@ -3,6 +3,7 @@ import { readStoredState } from "./localAdapter.js";
 
 const CACHE_PREFIX = "studyhub:cloud-cache:1:";
 const PENDING_PREFIX = "studyhub:cloud-pending:1:";
+const MIGRATION_DECISION_PREFIX = "studyhub:cloud-migration-decision:1:";
 
 export function cloudStorageKeys(userId) {
   const suffix = encodeURIComponent(String(userId));
@@ -10,7 +11,13 @@ export function cloudStorageKeys(userId) {
     cache: `${CACHE_PREFIX}${suffix}`,
     backup: `${CACHE_PREFIX}${suffix}:last-known-good`,
     pending: `${PENDING_PREFIX}${suffix}`,
+    migrationDecision: `${MIGRATION_DECISION_PREFIX}${suffix}`,
   };
+}
+
+function hasStudyData(state) {
+  return [state?.projects, state?.tasks, state?.focusSessions, state?.learningEntries]
+    .some((records) => Array.isArray(records) && records.length > 0);
 }
 
 function writeState(storage, key, state, backupKey = null) {
@@ -140,6 +147,10 @@ export class CloudStorageAdapter {
     this.storage.removeItem(this.keys.pending);
   }
 
+  acknowledgeMigration(decision) {
+    this.storage.setItem(this.keys.migrationDecision, decision);
+  }
+
   async load() {
     const cached = this.readCache();
     const pending = this.readPending();
@@ -153,6 +164,19 @@ export class CloudStorageAdapter {
         const remote = await this.gateway.load();
         if (remote) {
           this.cache(remote.data);
+          const legacy = readStoredState(this.storage);
+          const migrationDecided = Boolean(this.storage.getItem(this.keys.migrationDecision));
+          if (!migrationDecided && !hasStudyData(remote.data) && hasStudyData(legacy.data)) {
+            this.setStatus("synced", false, "Cuenta conectada · migración pendiente");
+            return {
+              data: remote.data,
+              recovery: legacy.recovery,
+              isNew: false,
+              source: "cloud-empty",
+              migrationCandidate: legacy.data,
+              migrationRequired: true,
+            };
+          }
           this.setStatus("synced", false, "Sincronizado con la nube");
           return { data: remote.data, recovery: null, isNew: false, source: "cloud" };
         }

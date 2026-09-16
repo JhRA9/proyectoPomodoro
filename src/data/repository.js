@@ -331,6 +331,7 @@ export class StudyHubRepository {
   async replaceFromMigration(candidate) {
     const next = prepareImportedState(candidate, this.clock());
     await this.adapter.save(next);
+    this.adapter.acknowledgeMigration?.("migrated");
     this.store.setState(next);
     return next;
   }
@@ -338,6 +339,7 @@ export class StudyHubRepository {
   async persistCurrentState() {
     const current = this.getState();
     await this.adapter.save(current);
+    this.adapter.acknowledgeMigration?.("skipped");
     return current;
   }
 

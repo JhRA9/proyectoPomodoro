@@ -196,6 +196,25 @@ describe("migration and user-scoped cache", () => {
     expect(cleanBrowser.repository.getState().projects[0].name).toBe("Migrado");
   });
 
+  it("offers recovery when an existing cloud row is empty and legacy data remains", async () => {
+    const backend = new FakeCloudBackend();
+    backend.seed(USER_A, emptyState());
+    const legacy = stateWithProject("Recuperable", "project-recoverable");
+    const storage = new MemoryStorage([[STORAGE_KEY, JSON.stringify(legacy)]]);
+
+    const context = await createCloudContext({ backend, userId: USER_A, storage });
+
+    expect(context.initialization).toMatchObject({
+      source: "cloud-empty",
+      migrationRequired: true,
+    });
+    expect(context.initialization.migrationCandidate.projects[0].name).toBe("Recuperable");
+
+    await context.repository.replaceFromMigration(context.initialization.migrationCandidate);
+    expect(backend.stateFor(USER_A).projects[0].name).toBe("Recuperable");
+    expect(storage.getItem(cloudStorageKeys(USER_A).migrationDecision)).toBe("migrated");
+  });
+
   it("omits migration by creating a new empty cloud space without deleting legacy data", async () => {
     const backend = new FakeCloudBackend();
     const legacy = stateWithProject("Solo local", "project-local-only");
@@ -208,6 +227,10 @@ describe("migration and user-scoped cache", () => {
     expect(backend.callsFor("save", USER_A)).toHaveLength(1);
     expect(backend.stateFor(USER_A).projects).toHaveLength(0);
     expect(storage.getItem(STORAGE_KEY)).toBe(original);
+    expect(storage.getItem(cloudStorageKeys(USER_A).migrationDecision)).toBe("skipped");
+
+    const refreshed = await createCloudContext({ backend, userId: USER_A, storage });
+    expect(refreshed.initialization.migrationRequired).not.toBe(true);
   });
 
   it("partitions cache and pending keys by authenticated user", async () => {
