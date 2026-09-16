@@ -60,7 +60,7 @@ function toastRegion(toasts) {
   return `<div class="toast-region" aria-live="polite" aria-atomic="true">${toasts.map((toast) => `<div class="toast ${toast.type === "error" ? "error" : ""}" data-toast-id="${toast.id}">${icon(toast.type === "error" ? "info" : "check", 18)}<span>${escapeHtml(toast.message)}</span><button class="icon-button" type="button" data-action="dismiss-toast" data-toast-id="${toast.id}" aria-label="Cerrar aviso">${icon("x", 15)}</button></div>`).join("")}</div>`;
 }
 
-class StudyHubApp {
+export class StudyHubApp {
   constructor(root, repository, store, router, context = {}) {
     this.root = root;
     this.repository = repository;
@@ -340,11 +340,13 @@ class StudyHubApp {
         if (!candidate) return;
         await this.repository.replaceFromMigration(candidate);
         this.migrationCandidate = null;
+        this.render();
         this.addToast("Tus datos locales se migraron a la nube.");
       }); break;
       case "skip-migration": await this.safely(async () => {
         await this.repository.persistCurrentState();
         this.migrationCandidate = null;
+        this.render();
         this.addToast("Se creó un espacio nuevo. La copia local anterior se conservó.");
       }); break;
       case "sync-now": await this.safely(async () => {
