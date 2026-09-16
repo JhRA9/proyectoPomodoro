@@ -11,7 +11,7 @@
 .main-nav a.active::before { content:""; position:absolute; left:-10px; width:3px; height:38px; border-radius:4px; background:#2690ff; box-shadow:0 0 15px #2690ff; }
 .main-nav a.active svg { color: #4096ff; }
 .sidebar blockquote { margin: auto 7px 0; color: #b4c2d5; font-size: .93rem; line-height: 1.65; }
-.profile { display: grid; grid-template-columns: 44px 1fr 36px; align-items: center; gap: 10px; padding: 18px 6px 0; margin-top: 25px; border-top: 1px solid var(--line-soft); }
+.profile { position: relative; z-index: 90; display: grid; grid-template-columns: 44px 1fr 36px; align-items: center; gap: 10px; padding: 18px 6px 0; margin-top: 25px; border-top: 1px solid var(--line-soft); }
 .profile > span, .avatar { display: grid; place-items: center; border-radius: 50%; background: linear-gradient(145deg,#446fae,#244774); }
 .profile > span { width: 44px; height: 44px; font-weight: 700; }
 .profile strong { font-size: .9rem; font-weight: 600; }
@@ -66,7 +66,7 @@
 @media (max-width: 1150px) {
   .app-shell { grid-template-columns: 92px minmax(0,1fr); }
   .sidebar { padding-inline: 14px; align-items: center; }
-  .brand > span:last-child, .main-nav span, .sidebar blockquote, .profile strong, .profile button { display: none; }
+  .brand > span:last-child, .main-nav span, .sidebar blockquote, .profile > strong, .profile > button { display: none; }
   .brand { padding: 0; }
   .main-nav a { justify-content: center; padding: 0; width: 54px; }
   .profile { display: block; padding-inline: 0; }
@@ -82,7 +82,6 @@
   .main-nav a.active::before { left: 8px; right: 8px; top: -7px; width: auto; height: 3px; }
   .topbar { height: 64px; padding: 0 16px; }
   .search-field { flex: 1; width: auto; }
-  .avatar { display: none; }
   .dashboard { padding: 23px 16px 36px; }
   .page-heading { align-items: stretch; flex-direction: column; }
   .primary-button { width: 100%; }

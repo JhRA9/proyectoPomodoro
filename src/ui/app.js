@@ -29,15 +29,17 @@ function initialUiState() {
     pendingImport: null,
     reflectionDraft: null,
     settingsOpen: false,
+    settingsAnchor: null,
     dimTheme: false,
     syncStatus: { state: "local", pending: false, message: "Guardado en este dispositivo" },
     toasts: [],
   };
 }
 
-function shellSidebar(state, route, ui) {
+function shellSidebar(state, route, ui, account) {
   if (route.name === "projects") {
-    return `<aside class="sidebar dashboard-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="active" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote><div class="profile"><span>SH</span><strong>${escapeHtml(state.settings.profileName)}</strong><button class="icon-button" type="button" data-action="open-settings" aria-label="Abrir ajustes">${icon("settings", 19)}</button></div></aside>`;
+    const sidebarSettingsOpen = ui.settingsOpen && ui.settingsAnchor === "sidebar";
+    return `<aside class="sidebar dashboard-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="active" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" data-settings-anchor="topbar" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote><div class="profile"><span>SH</span><strong>${escapeHtml(state.settings.profileName)}</strong><button class="icon-button" type="button" data-action="open-settings" data-settings-anchor="sidebar" aria-haspopup="menu" aria-expanded="${sidebarSettingsOpen}" aria-label="Abrir ajustes">${icon("settings", 19)}</button>${sidebarSettingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div></aside>`;
   }
   const projectQuery = normalizeForSearch(ui.projectSearch);
   const filtered = state.projects.filter((project) => normalizeForSearch(`${project.name} ${project.description}`).includes(projectQuery));
@@ -53,7 +55,8 @@ function settingsMenu(state, account, syncStatus) {
 
 function shellTopbar(state, route, ui, account) {
   const dashboard = route.name === "projects";
-  return `<header class="topbar"><label class="search-field">${icon("search")}<span class="sr-only">${dashboard ? "Buscar proyectos" : "Buscar en tus proyectos"}</span><input type="search" data-input="${dashboard ? "search" : "project-search"}" value="${escapeHtml(dashboard ? ui.search : ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><button class="icon-button theme-button" type="button" data-action="toggle-theme" aria-label="Cambiar intensidad del tema">${icon(ui.dimTheme ? "moon" : "sun")}</button><div class="settings-wrap"><button class="avatar" type="button" data-action="open-settings" aria-haspopup="menu" aria-expanded="${ui.settingsOpen}" aria-label="Copias y ajustes">SH</button>${ui.settingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div></header>`;
+  const topbarSettingsOpen = ui.settingsOpen && ui.settingsAnchor !== "sidebar";
+  return `<header class="topbar"><label class="search-field">${icon("search")}<span class="sr-only">${dashboard ? "Buscar proyectos" : "Buscar en tus proyectos"}</span><input type="search" data-input="${dashboard ? "search" : "project-search"}" value="${escapeHtml(dashboard ? ui.search : ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><button class="icon-button theme-button" type="button" data-action="toggle-theme" aria-label="Cambiar intensidad del tema">${icon(ui.dimTheme ? "moon" : "sun")}</button><div class="settings-wrap"><button class="avatar" type="button" data-action="open-settings" data-settings-anchor="topbar" aria-haspopup="menu" aria-expanded="${topbarSettingsOpen}" aria-label="Copias y ajustes">SH</button>${topbarSettingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div></header>`;
 }
 
 function toastRegion(toasts) {
@@ -219,7 +222,7 @@ export class StudyHubApp {
     const editingProject = this.ui.dialog?.type === "project" ? { ...(storedProject ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const pendingTask = state.pendingCompletion ? state.tasks.find((item) => item.id === state.pendingCompletion.taskId) : null;
-    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.ui.reflectionDraft ?? {}, state.pendingCompletion) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui, this.account)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.ui.reflectionDraft ?? {}, state.pendingCompletion) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
     this.openPendingDialog();
     this.timer.renderNow();
   }
@@ -263,6 +266,7 @@ export class StudyHubApp {
     if (this.ui.menu || this.ui.settingsOpen) {
       this.ui.menu = null;
       this.ui.settingsOpen = false;
+      this.ui.settingsAnchor = null;
       this.render();
     }
     const projectCard = event.target.closest(".project-card[data-project-id]");
@@ -358,11 +362,19 @@ export class StudyHubApp {
         globalThis.location?.reload?.();
       }); break;
       case "close-dialog": this.ui.dialog = null; this.render(); break;
-      case "open-settings": this.ui.settingsOpen = !this.ui.settingsOpen; this.ui.menu = null; this.render(); break;
+      case "open-settings": {
+        const anchor = target.dataset.settingsAnchor || "topbar";
+        const closeCurrent = this.ui.settingsOpen && this.ui.settingsAnchor === anchor;
+        this.ui.settingsOpen = !closeCurrent;
+        this.ui.settingsAnchor = closeCurrent ? null : anchor;
+        this.ui.menu = null;
+        this.render();
+        break;
+      }
       case "toggle-theme": this.ui.dimTheme = !this.ui.dimTheme; this.render(); break;
-      case "export-backup": this.exportBackup(); this.ui.settingsOpen = false; this.render(); break;
-      case "import-backup": this.ui.settingsOpen = false; this.root.querySelector("#backup-file")?.click(); break;
-      case "reset-data": this.ui.confirm = { type: "reset", title: "¿Empezar desde cero?", message: this.account ? "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de esta cuenta en la nube y en este dispositivo." : "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de este dispositivo.", confirmLabel: "Limpiar datos" }; this.ui.settingsOpen = false; this.render(); break;
+      case "export-backup": this.exportBackup(); this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
+      case "import-backup": this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.root.querySelector("#backup-file")?.click(); break;
+      case "reset-data": this.ui.confirm = { type: "reset", title: "¿Empezar desde cero?", message: this.account ? "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de esta cuenta en la nube y en este dispositivo." : "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de este dispositivo.", confirmLabel: "Limpiar datos" }; this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
       case "cancel-confirm": this.ui.confirm = null; this.ui.pendingImport = null; this.render(); break;
       case "confirm-action": await this.confirmAction(); break;
       case "dismiss-toast": this.ui.toasts = this.ui.toasts.filter((toast) => toast.id !== target.dataset.toastId); this.renderToasts(); break;
@@ -520,7 +532,7 @@ export class StudyHubApp {
     if ((event.key === "Enter" || event.key === " ") && event.target.matches(".task-row[data-task-id]")) {
       event.preventDefault(); const task = this.repository.getState().tasks.find((item) => item.id === event.target.dataset.taskId); if (task) this.router.navigate(`projects/${task.projectId}/tasks/${task.id}`);
     }
-    if (event.key === "Escape" && (this.ui.menu || this.ui.settingsOpen)) { this.ui.menu = null; this.ui.settingsOpen = false; this.render(); }
+    if (event.key === "Escape" && (this.ui.menu || this.ui.settingsOpen)) { this.ui.menu = null; this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); }
   }
 
   handleDialogCancel(event) {
