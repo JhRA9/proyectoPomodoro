@@ -1,0 +1,49 @@
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+.nyc_output/
+.cache/
+.vite/
+.sites-runtime/
+.netlify/
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+credentials*.json
+secrets*.json
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.temp
+*.bak
+*.orig
+*.swp
+*.swo
+*~
+.tmp/
+tmp/
+temp/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
