@@ -75,6 +75,13 @@
 .color-options input:checked + span { box-shadow: 0 0 0 2px #0e1b2c, 0 0 0 4px var(--swatch); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; }
 .reflection-dialog { width: min(650px, calc(100vw - 28px)); }
+.dialog-learning-field { display: grid; gap: 7px; margin-top: 16px; }
+.dialog-learning-field > label { display: block; margin: 0; }
+.dialog-learning-field > label span { margin-left: 5px; color: var(--muted-2); font-size: .72rem; font-weight: 400; }
+.dialog-learning-field > textarea { min-height: 105px; }
+.reflection-dialog .learning-images { margin: 2px 0; }
+.reflection-dialog .learning-image-controls { margin-top: 1px; }
+.reflection-dialog .learning-image-picker { margin: 0; color: #71adff; font-size: .65rem; }
 .form-hint { margin: 15px 0 0; padding: 10px 12px; color: #a9c8f6; border-radius: 9px; background: rgba(34,111,219,.12); font-size: .78rem; }
 .field-note { margin: 8px 0 0; color: var(--muted-2); font-size: .75rem; }
 .confirm-dialog { text-align: center; }

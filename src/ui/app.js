@@ -8,14 +8,16 @@ import { createStore } from "../state/store.js";
 import { TimerController } from "../timer/timerController.js";
 import { formatDuration, formatFocusTimer, toLocalDateKey } from "../utils/time.js";
 import { escapeHtml, normalizeForSearch } from "../utils/text.js";
+import { MAX_LEARNING_IMAGES, prepareLearningImage } from "../utils/learningImages.js";
 import { focusView } from "../views/focusView.js";
 import { projectView } from "../views/projectView.js";
 import { projectsView } from "../views/projectsView.js";
 import { registerStudyHubTools } from "../webmcp.js";
 import { brand, confirmDialog, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
 import { icon } from "./icons.js";
+import { LearningDraftStore, normalizeLearningDraft } from "./learningDrafts.js";
 
-function initialUiState() {
+function initialUiState(learningDrafts = {}) {
   const today = new Date();
   return {
     search: "",
@@ -27,7 +29,8 @@ function initialUiState() {
     dialog: null,
     confirm: null,
     pendingImport: null,
-    reflectionDraft: null,
+    focusLearningTab: "draft",
+    learningDrafts,
     settingsOpen: false,
     settingsAnchor: null,
     dimTheme: false,
@@ -73,7 +76,8 @@ export class StudyHubApp {
     this.auth = context.auth ?? null;
     this.adapter = context.adapter ?? repository.adapter;
     this.migrationCandidate = context.migrationCandidate ?? null;
-    this.ui = initialUiState();
+    this.learningDraftStore = new LearningDraftStore(context.draftStorage ?? globalThis.localStorage, this.account?.id ?? "local");
+    this.ui = initialUiState(this.learningDraftStore.load());
     if (this.adapter?.getStatus) this.ui.syncStatus = this.adapter.getStatus();
     this.toastCounter = 0;
     this.busy = false;
@@ -91,6 +95,7 @@ export class StudyHubApp {
     this.onSubmit = (event) => this.handleSubmit(event);
     this.onKeydown = (event) => this.handleKeydown(event);
     this.onCancel = (event) => this.handleDialogCancel(event);
+    this.onPaste = (event) => { void this.handlePaste(event); };
   }
 
   mount() {
@@ -100,6 +105,7 @@ export class StudyHubApp {
     this.root.addEventListener("submit", this.onSubmit);
     this.root.addEventListener("keydown", this.onKeydown);
     this.root.addEventListener("cancel", this.onCancel);
+    this.root.addEventListener("paste", this.onPaste);
     this.unsubscribeStore = this.store.subscribe(() => this.render());
     this.unsubscribeRouter = this.router.subscribe(() => {
       this.ui.menu = null;
@@ -141,6 +147,7 @@ export class StudyHubApp {
     this.root.removeEventListener("submit", this.onSubmit);
     this.root.removeEventListener("keydown", this.onKeydown);
     this.root.removeEventListener("cancel", this.onCancel);
+    this.root.removeEventListener("paste", this.onPaste);
   }
 
   addToast(message, type = "success") {
@@ -163,14 +170,60 @@ export class StudyHubApp {
     region.outerHTML = toastRegion(this.ui.toasts);
   }
 
+  getLearningDraft(taskId) {
+    return normalizeLearningDraft(this.ui.learningDrafts?.[taskId]);
+  }
+
+  setLearningDraft(taskId, value) {
+    if (!taskId) return false;
+    const draft = normalizeLearningDraft(value);
+    const empty = !draft.learned && !draft.unresolved && !draft.nextSession && draft.learnedImages.length === 0;
+    const next = { ...(this.ui.learningDrafts ?? {}) };
+    if (empty) delete next[taskId];
+    else next[taskId] = draft;
+    this.ui.learningDrafts = next;
+    try {
+      this.learningDraftStore.save(next);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  clearLearningDraft(taskId) {
+    if (!taskId || !this.ui.learningDrafts?.[taskId]) return;
+    const next = { ...this.ui.learningDrafts };
+    delete next[taskId];
+    this.ui.learningDrafts = next;
+    try { this.learningDraftStore.save(next); } catch { /* The saved reflection remains the source of truth. */ }
+  }
+
+  clearAllLearningDrafts() {
+    this.ui.learningDrafts = {};
+    try { this.learningDraftStore.clear(); } catch { /* Ignore unavailable browser storage. */ }
+  }
+
+  captureLearningDraftForm(form) {
+    if (!form) return null;
+    const taskId = form.dataset.taskId || this.repository.getState().pendingCompletion?.taskId;
+    if (!taskId) return null;
+    const fields = Object.fromEntries(new FormData(form).entries());
+    const draft = { ...this.getLearningDraft(taskId), ...fields };
+    const persisted = this.setLearningDraft(taskId, draft);
+    return { taskId, draft: this.getLearningDraft(taskId), persisted };
+  }
+
   captureOpenFormDraft() {
-    const form = this.root.querySelector('form[data-form="project"], form[data-form="task"], form[data-form="reflection"]');
-    if (!form) return;
-    const draft = Object.fromEntries(new FormData(form).entries());
-    if (form.dataset.form === "reflection") {
-      if (this.repository.getState().pendingCompletion) this.ui.reflectionDraft = draft;
+    const reflectionForm = this.root.querySelector?.('form[data-form="reflection"]');
+    if (reflectionForm) {
+      this.captureLearningDraftForm(reflectionForm);
       return;
     }
+    const learningForm = this.root.querySelector?.('form[data-form="learning-draft"]');
+    if (learningForm) this.captureLearningDraftForm(learningForm);
+    const form = this.root.querySelector?.('form[data-form="project"], form[data-form="task"]');
+    if (!form) return;
+    const draft = Object.fromEntries(new FormData(form).entries());
     if (this.ui.dialog?.type === form.dataset.form) this.ui.dialog = { ...this.ui.dialog, draft };
   }
 
@@ -206,8 +259,8 @@ export class StudyHubApp {
     return { route, project, task };
   }
 
-  render() {
-    this.captureOpenFormDraft();
+  render({ skipDraftCapture = false } = {}) {
+    if (!skipDraftCapture) this.captureOpenFormDraft();
     const state = this.repository.getState();
     if (!state) return;
     const { route, project, task } = this.resolveRoute();
@@ -222,7 +275,7 @@ export class StudyHubApp {
     const editingProject = this.ui.dialog?.type === "project" ? { ...(storedProject ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const pendingTask = state.pendingCompletion ? state.tasks.find((item) => item.id === state.pendingCompletion.taskId) : null;
-    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui, this.account)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.ui.reflectionDraft ?? {}, state.pendingCompletion) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui, this.account)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), state.pendingCompletion) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
     this.openPendingDialog();
     this.timer.renderNow();
   }
@@ -307,11 +360,26 @@ export class StudyHubApp {
         this.ui.menu = null;
         const task = this.repository.getState().tasks.find((item) => item.id === target.dataset.taskId);
         if (task?.status === target.dataset.status) { this.render(); return; }
+        if (target.dataset.status === "completed") this.captureOpenFormDraft();
         await this.repository.setTaskStatus(target.dataset.taskId, target.dataset.status);
         this.addToast(target.dataset.status === "completed" ? "Guarda la reflexión para completar la tarea." : "Estado actualizado.");
       }); break;
       case "toggle-filter": this.ui.menu = this.ui.menu?.type === "filter" ? null : { type: "filter" }; this.render(); break;
       case "set-filter": this.ui.taskFilter = target.dataset.filter; this.ui.menu = null; this.render(); break;
+      case "set-learning-tab": this.ui.focusLearningTab = target.dataset.learningTab === "history" ? "history" : "draft"; this.render(); break;
+      case "remove-learning-image": {
+        this.captureOpenFormDraft();
+        const taskId = target.dataset.taskId || state.pendingCompletion?.taskId;
+        const draft = this.getLearningDraft(taskId);
+        const persisted = this.setLearningDraft(taskId, {
+          ...draft,
+          learnedImages: draft.learnedImages.filter((image) => image.id !== target.dataset.imageId),
+        });
+        this.render();
+        this.focusLearningTextarea(taskId);
+        if (!persisted) this.addToast("La imagen se quitó, pero el borrador no pudo guardarse en este navegador.", "error");
+        break;
+      }
       case "calendar-prev": this.moveCalendar(-1); break;
       case "calendar-next": this.moveCalendar(1); break;
       case "calendar-today": { const today = new Date(); this.ui.calendar = { year: today.getFullYear(), month: today.getMonth() }; this.ui.selectedDate = null; this.render(); break; }
@@ -321,20 +389,20 @@ export class StudyHubApp {
       case "go-project": this.router.navigate(`projects/${target.dataset.projectId}`); break;
       case "toggle-timer": await this.safely(async () => { const timer = state.activeTimer; if (timer?.taskId === target.dataset.taskId && timer.phase === "running") { await this.repository.pauseTimer(); this.addToast("Sesión pausada."); } else { await this.repository.startTimer(target.dataset.taskId); this.addToast(timer ? "Sesión reanudada." : "Sesión iniciada."); } }); break;
       case "stop-timer": await this.safely(async () => {
-        this.ui.reflectionDraft = null;
+        this.captureOpenFormDraft();
         const saved = await this.repository.stopTimer();
         this.addToast(saved ? `Sesión guardada: ${formatDuration(saved, true)}. Añade u omite la reflexión.` : "La sesión se detuvo sin tiempo pendiente.");
       }); break;
       case "complete-task": await this.safely(async () => {
-        this.ui.reflectionDraft = null;
+        this.captureOpenFormDraft();
         await this.repository.requestCompletion(target.dataset.taskId);
         this.addToast("Guarda la reflexión para completar la tarea.");
       }); break;
       case "cancel-reflection": {
         const reflectionKind = state.pendingCompletion?.kind ?? "completion";
+        this.captureOpenFormDraft();
         await this.safely(async () => {
           await this.repository.cancelCompletion();
-          this.ui.reflectionDraft = null;
           this.addToast(reflectionKind === "session" ? "Reflexión omitida; la sesión y su tiempo quedaron guardados." : "La tarea sigue abierta; el tiempo ya quedó guardado.");
         });
         break;
@@ -395,20 +463,25 @@ export class StudyHubApp {
     await this.safely(async () => {
       this.ui.confirm = null;
       if (current.type === "delete-project") {
+        const taskIds = this.repository.getState().tasks.filter((task) => task.projectId === current.id).map((task) => task.id);
         await this.repository.deleteProject(current.id);
+        taskIds.forEach((taskId) => this.clearLearningDraft(taskId));
         if (this.router.current().projectId === current.id) this.router.navigate("projects");
         this.addToast("Proyecto eliminado.");
       } else if (current.type === "delete-task") {
         const task = this.repository.getState().tasks.find((item) => item.id === current.id);
         await this.repository.deleteTask(current.id);
+        this.clearLearningDraft(current.id);
         if (this.router.current().taskId === current.id) this.router.navigate(`projects/${task.projectId}`);
         this.addToast("Tarea eliminada.");
       } else if (current.type === "reset") {
         await this.repository.resetAll();
+        this.clearAllLearningDrafts();
         this.router.navigate("projects");
         this.addToast("Tu espacio quedó vacío.");
       } else if (current.type === "import") {
         await this.repository.importEnvelope(this.ui.pendingImport);
+        this.clearAllLearningDrafts();
         this.ui.pendingImport = null;
         this.router.navigate("projects");
         this.addToast("Copia restaurada correctamente.");
@@ -430,7 +503,78 @@ export class StudyHubApp {
     this.addToast("Copia de seguridad exportada.");
   }
 
+  focusLearningTextarea(taskId) {
+    requestAnimationFrame(() => {
+      const pendingTaskId = this.repository.getState().pendingCompletion?.taskId;
+      const selector = pendingTaskId === taskId
+        ? '#reflection-dialog textarea[name="learned"]'
+        : `form[data-form="learning-draft"][data-task-id="${taskId}"] textarea[name="learned"]`;
+      const textarea = this.root.querySelector?.(selector);
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      }
+    });
+  }
+
+  async addLearningImageFiles(form, files) {
+    const taskId = form?.dataset.taskId || this.repository.getState().pendingCompletion?.taskId;
+    if (!taskId) return;
+    this.captureLearningDraftForm(form);
+    const current = this.getLearningDraft(taskId);
+    const available = MAX_LEARNING_IMAGES - current.learnedImages.length;
+    if (available <= 0) {
+      this.addToast(`Puedes guardar hasta ${MAX_LEARNING_IMAGES} imágenes por reflexión.`, "error");
+      return;
+    }
+    const selected = [...files].filter((file) => String(file?.type).startsWith("image/")).slice(0, available);
+    if (!selected.length) {
+      this.addToast("No encontramos una imagen válida para añadir.", "error");
+      return;
+    }
+
+    let prepared = [];
+    const success = await this.safely(async () => {
+      for (const file of selected) prepared.push(await prepareLearningImage(file));
+    });
+    if (!success) return;
+    const persisted = this.setLearningDraft(taskId, {
+      ...this.getLearningDraft(taskId),
+      learnedImages: [...this.getLearningDraft(taskId).learnedImages, ...prepared],
+    });
+    this.render();
+    this.focusLearningTextarea(taskId);
+    if (!persisted) {
+      this.addToast("La imagen está lista, pero el borrador no pudo guardarse en este navegador.", "error");
+      return;
+    }
+    const omitted = [...files].filter((file) => String(file?.type).startsWith("image/")).length - selected.length;
+    this.addToast(omitted > 0 ? `Imagen añadida. El máximo es ${MAX_LEARNING_IMAGES} por reflexión.` : prepared.length === 1 ? "Imagen añadida a tus notas." : `${prepared.length} imágenes añadidas a tus notas.`);
+  }
+
+  async handlePaste(event) {
+    const textarea = event.target.closest?.('textarea[name="learned"]');
+    const form = textarea?.closest('form[data-form="learning-draft"], form[data-form="reflection"]');
+    if (!form) return;
+    const files = [...(event.clipboardData?.items ?? [])]
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+    if (!files.length) return;
+    event.preventDefault();
+    await this.addLearningImageFiles(form, files);
+  }
+
   handleInput(event) {
+    const learningForm = event.target.closest?.('form[data-form="learning-draft"], form[data-form="reflection"]');
+    if (learningForm && event.target.matches("textarea")) {
+      const captured = this.captureLearningDraftForm(learningForm);
+      if (captured && !captured.persisted) {
+        const status = learningForm.querySelector?.(".learning-draft-status");
+        if (status) status.textContent = "No se pudo guardar el borrador en este navegador";
+      }
+      return;
+    }
     const inputType = event.target.dataset.input;
     if (inputType !== "search" && inputType !== "project-search") return;
     const searchScope = event.target.closest(".topbar") ? ".topbar" : ".sidebar";
@@ -447,6 +591,12 @@ export class StudyHubApp {
   }
 
   async handleChange(event) {
+    if (event.target.dataset.input === "learning-images") {
+      const form = event.target.closest('form[data-form="learning-draft"], form[data-form="reflection"]');
+      await this.addLearningImageFiles(form, event.target.files ?? []);
+      event.target.value = "";
+      return;
+    }
     if (event.target.dataset.input === "backup-file") {
       const [file] = event.target.files;
       if (!file) return;
@@ -503,11 +653,14 @@ export class StudyHubApp {
       }
     }
     if (form.dataset.form === "reflection") {
-      this.ui.reflectionDraft = data;
-      const reflectionKind = this.repository.getState().pendingCompletion?.kind ?? "completion";
-      const success = await this.safely(async () => { await this.repository.saveReflection(data); });
+      const pending = this.repository.getState().pendingCompletion;
+      const captured = this.captureLearningDraftForm(form);
+      const reflectionKind = pending?.kind ?? "completion";
+      const reflection = { ...data, learnedImages: captured?.draft.learnedImages ?? [] };
+      const success = await this.safely(async () => { await this.repository.saveReflection(reflection); });
       if (success) {
-        this.ui.reflectionDraft = null;
+        this.clearLearningDraft(pending?.taskId);
+        this.render({ skipDraftCapture: true });
         this.addToast(reflectionKind === "session" ? "Reflexión de la sesión guardada." : "Tarea completada y reflexión guardada.");
       }
     }
@@ -543,9 +696,9 @@ export class StudyHubApp {
     if (event.target.id === "reflection-dialog") {
       event.preventDefault();
       const reflectionKind = this.repository.getState().pendingCompletion?.kind ?? "completion";
+      this.captureOpenFormDraft();
       void this.safely(async () => {
         await this.repository.cancelCompletion();
-        this.ui.reflectionDraft = null;
         this.addToast(reflectionKind === "session" ? "Reflexión omitida; la sesión y su tiempo quedaron guardados." : "La tarea sigue abierta; el tiempo ya quedó guardado.");
       });
       return;

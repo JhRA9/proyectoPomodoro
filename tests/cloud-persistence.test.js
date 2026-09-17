@@ -88,8 +88,15 @@ describe("cloud persistence across contexts", () => {
     expect(await browserA.repository.stopTimer()).toBe(600);
     await browserA.repository.saveReflection({
       learned: "Aprendizaje 1",
-      unresolved: "Duda 1",
-      nextSession: "Paso 2",
+      unresolved: "",
+      nextSession: "",
+      learnedImages: [{
+        id: "note-image-cloud",
+        dataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
+        alt: "Apunte visual",
+        width: 1,
+        height: 1,
+      }],
     });
 
     await browserA.repository.startTimer(task.id);
@@ -106,6 +113,11 @@ describe("cloud persistence across contexts", () => {
     const state = browserB.repository.getState();
     expect(state.focusSessions.map((session) => session.durationSeconds)).toEqual([600, 300]);
     expect(state.learningEntries.map((entry) => entry.learned)).toEqual(["Aprendizaje 1", "Aprendizaje 2"]);
+    expect(state.learningEntries[0]).toMatchObject({
+      unresolved: "",
+      nextSession: "",
+      learnedImages: [expect.objectContaining({ id: "note-image-cloud", alt: "Apunte visual" })],
+    });
     expect(new Set(state.learningEntries.map((entry) => entry.focusSessionId)).size).toBe(2);
     expect(state.tasks.find((item) => item.id === task.id).accumulatedSeconds).toBe(900);
     expect(state.focusSessions.reduce((total, session) => total + session.durationSeconds, 0)).toBe(900);

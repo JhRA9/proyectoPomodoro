@@ -2,7 +2,9 @@ import { PROJECT_COLORS, PROJECT_ICONS } from "../data/schema.js";
 import { projectStats } from "../state/selectors.js";
 import { dueCategory, formatDate, formatDuration, relativeDueLabel } from "../utils/time.js";
 import { escapeHtml } from "../utils/text.js";
+import { MAX_LEARNING_IMAGES, normalizeLearningImages } from "../utils/learningImages.js";
 import { icon } from "./icons.js";
+import { normalizeLearningDraft } from "./learningDrafts.js";
 
 export const STATUS_META = {
   pending: { label: "Pendiente", tone: "neutral" },
@@ -96,6 +98,27 @@ export function dueNotice(tasks) {
   return `<section class="due-notice" aria-labelledby="due-title"><span class="notice-icon">${icon("bell", 24)}</span><div><h2 id="due-title">Tienes ${near.length} ${near.length === 1 ? "tarea próxima" : "tareas próximas"} a vencer</h2><p>Revisa tus fechas y decide qué atender primero.</p></div><ul>${near.slice(0, 3).map((task) => `<li class="due-${dueCategory(task)}"><span></span><div><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(relativeDueLabel(task.dueDate))}</small></div></li>`).join("")}</ul></section>`;
 }
 
+function learningImages(images, { editable = false, taskId = "", scope = "entry" } = {}) {
+  const normalized = normalizeLearningImages(images);
+  if (!normalized.length) return "";
+  return `<div class="learning-images ${editable ? "is-editable" : ""}">${normalized.map((image) => `<figure class="learning-image"><img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.alt)}" ${image.width ? `width="${image.width}"` : ""} ${image.height ? `height="${image.height}"` : ""} loading="lazy" />${editable ? `<button class="learning-image-remove" type="button" data-action="remove-learning-image" data-task-id="${escapeHtml(taskId)}" data-image-id="${escapeHtml(image.id)}" aria-label="Quitar imagen">${icon("x", 15)}</button>` : ""}</figure>`).join("")}</div>`;
+}
+
+function learnedEntryContent(entry) {
+  return `<div class="learned-entry-content">${learningImages(entry.learnedImages)}<p>${escapeHtml(entry.learned)}</p></div>`;
+}
+
+function learningImageControls(images, taskId, scope) {
+  const count = normalizeLearningImages(images).length;
+  return `<div class="learning-image-controls"><span>Pega una imagen con Ctrl+V o</span><label class="learning-image-picker">${icon("upload", 15)} Añadir imagen<input class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" multiple data-input="learning-images" data-task-id="${escapeHtml(taskId)}" data-image-scope="${escapeHtml(scope)}" /></label><small>${count}/${MAX_LEARNING_IMAGES}</small></div>`;
+}
+
+export function learningDraftForm(task, value = {}) {
+  const draft = normalizeLearningDraft(value);
+  const suffix = `draft-${escapeHtml(task.id)}`;
+  return `<form class="learning-draft-form" data-form="learning-draft" data-task-id="${escapeHtml(task.id)}" autocomplete="off"><div class="learning-draft-intro"><strong>Anota mientras estudias</strong><p>Este borrador se guarda automáticamente en este navegador y aparecerá al detener o completar la sesión.</p></div><div class="learning-draft-field learned-field"><label for="learned-${suffix}">¿Qué aprendí? <span>necesario al guardar</span></label>${learningImages(draft.learnedImages, { editable: true, taskId: task.id, scope: "draft" })}<textarea id="learned-${suffix}" name="learned" rows="7" maxlength="1200" data-input="learning-draft" placeholder="Escribe aquí tus apuntes. También puedes pegar imágenes…">${escapeHtml(draft.learned)}</textarea>${learningImageControls(draft.learnedImages, task.id, "draft")}</div><div class="learning-draft-field"><label for="unresolved-${suffix}">¿Qué me faltó por responder / qué no entendí? <span>opcional</span></label><textarea id="unresolved-${suffix}" name="unresolved" rows="4" maxlength="1200" data-input="learning-draft" placeholder="Registra dudas para retomarlas…">${escapeHtml(draft.unresolved)}</textarea></div><div class="learning-draft-field"><label for="next-${suffix}">¿Qué haré en la siguiente sesión? <span>opcional</span></label><textarea id="next-${suffix}" name="nextSession" rows="4" maxlength="1200" data-input="learning-draft" placeholder="Define un siguiente paso si lo necesitas…">${escapeHtml(draft.nextSession)}</textarea></div><p class="learning-draft-status">Guardado automático · se vacía cuando guardas la reflexión</p></form>`;
+}
+
 export function learningTable(entries, state, scope = "project") {
   if (!entries.length) {
     return `<div class="empty-state compact">${icon("book", 27)}<strong>Aún no hay reflexiones</strong><p>Cuando detengas o completes una sesión y guardes su reflexión, aparecerá aquí.</p></div>`;
@@ -105,7 +128,7 @@ export function learningTable(entries, state, scope = "project") {
     const first = scope === "task"
       ? `Sesión ${index + 1}<small>${formatDate(entry.date, { year: true })}</small>`
       : `Clase ${index + 1}<small class="entry-task-title">${escapeHtml(task?.title || "Tarea")}</small><small>${formatDate(entry.date, { year: true })}</small>`;
-    return `<tr><th scope="row">${first}</th><td>${escapeHtml(entry.learned)}</td><td>${escapeHtml(entry.unresolved)}</td>${scope === "task" ? `<td>${escapeHtml(entry.nextSession)}</td>` : ""}</tr>`;
+    return `<tr><th scope="row">${first}</th><td>${learnedEntryContent(entry)}</td><td><p class="learning-cell-copy">${escapeHtml(entry.unresolved)}</p></td>${scope === "task" ? `<td><p class="learning-cell-copy">${escapeHtml(entry.nextSession)}</p></td>` : ""}</tr>`;
   }).join("")}</tbody></table></div>`;
 }
 
@@ -125,13 +148,14 @@ export function taskFormDialog(projectId, task = null) {
 }
 
 export function reflectionDialog(task, draft = {}, pending = {}) {
+  const normalizedDraft = normalizeLearningDraft(draft);
   const completesTask = (pending.kind ?? "completion") === "completion";
   const title = completesTask ? "Reflexiona antes de completar" : "Reflexión de la sesión";
   const hint = completesTask
     ? "La tarea se marcará como completada solo cuando guardes esta reflexión."
     : "La sesión y su tiempo ya están guardados. Puedes omitir la reflexión sin perderlos.";
   const submitLabel = completesTask ? "Guardar y completar" : "Guardar reflexión";
-  return `<dialog class="app-dialog reflection-dialog" id="reflection-dialog" aria-labelledby="reflection-title"><form data-form="reflection"><div class="dialog-heading"><div><p class="eyebrow">Cierre de sesión</p><h2 id="reflection-title">${title}</h2><p>${escapeHtml(task?.title || "Tarea")}</p></div></div><label>¿Qué aprendí?<textarea name="learned" rows="3" maxlength="1200" required placeholder="Resume la idea más importante…" autofocus>${escapeHtml(draft.learned ?? "")}</textarea></label><label>¿Qué me faltó por responder / qué no entendí?<textarea name="unresolved" rows="3" maxlength="1200" required placeholder="Registra tus dudas para retomarlas…">${escapeHtml(draft.unresolved ?? "")}</textarea></label><label>¿Qué haré en la siguiente sesión?<textarea name="nextSession" rows="3" maxlength="1200" required placeholder="Define un siguiente paso concreto…">${escapeHtml(draft.nextSession ?? "")}</textarea></label><p class="form-hint">${hint}</p><div class="dialog-actions"><button class="secondary-button" type="button" data-action="cancel-reflection">${completesTask ? "Ahora no" : "Omitir"}</button><button class="primary-button" type="submit">${icon("check")} ${submitLabel}</button></div></form></dialog>`;
+  return `<dialog class="app-dialog reflection-dialog" id="reflection-dialog" aria-labelledby="reflection-title"><form data-form="reflection" data-task-id="${escapeHtml(task?.id ?? "")}"><div class="dialog-heading"><div><p class="eyebrow">Cierre de sesión</p><h2 id="reflection-title">${title}</h2><p>${escapeHtml(task?.title || "Tarea")}</p></div></div><div class="dialog-learning-field"><label for="reflection-learned">¿Qué aprendí? <span>obligatorio</span></label>${learningImages(normalizedDraft.learnedImages, { editable: true, taskId: task?.id, scope: "reflection" })}<textarea id="reflection-learned" name="learned" rows="4" maxlength="1200" required placeholder="Resume la idea más importante…" autofocus>${escapeHtml(normalizedDraft.learned)}</textarea>${learningImageControls(normalizedDraft.learnedImages, task?.id, "reflection")}</div><label>¿Qué me faltó por responder / qué no entendí? <span>opcional</span><textarea name="unresolved" rows="3" maxlength="1200" placeholder="Registra tus dudas para retomarlas…">${escapeHtml(normalizedDraft.unresolved)}</textarea></label><label>¿Qué haré en la siguiente sesión? <span>opcional</span><textarea name="nextSession" rows="3" maxlength="1200" placeholder="Define un siguiente paso concreto…">${escapeHtml(normalizedDraft.nextSession)}</textarea></label><p class="form-hint">${hint}</p><div class="dialog-actions"><button class="secondary-button" type="button" data-action="cancel-reflection">${completesTask ? "Ahora no" : "Omitir"}</button><button class="primary-button" type="submit">${icon("check")} ${submitLabel}</button></div></form></dialog>`;
 }
 
 export function confirmDialog(confirmState) {

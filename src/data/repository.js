@@ -1,5 +1,6 @@
 import { createId } from "../utils/id.js";
-import { cleanText } from "../utils/text.js";
+import { cleanMultilineText, cleanText } from "../utils/text.js";
+import { normalizeLearningImages } from "../utils/learningImages.js";
 import { toLocalDateKey } from "../utils/time.js";
 import {
   PROJECT_COLORS,
@@ -287,10 +288,11 @@ export class StudyHubRepository {
   }
 
   async saveReflection(input) {
-    const learned = cleanText(input.learned, 1200);
-    const unresolved = cleanText(input.unresolved, 1200);
-    const nextSession = cleanText(input.nextSession, 1200);
-    if (!learned || !unresolved || !nextSession) throw new Error("Completa las tres preguntas antes de guardar.");
+    const learned = cleanMultilineText(input.learned, 1200);
+    const unresolved = cleanMultilineText(input.unresolved, 1200);
+    const nextSession = cleanMultilineText(input.nextSession, 1200);
+    const learnedImages = normalizeLearningImages(input.learnedImages);
+    if (!learned) throw new Error("Escribe qué aprendiste antes de guardar.");
     const now = this.clock();
     return this.commit((state) => {
       const pending = state.pendingCompletion;
@@ -310,6 +312,7 @@ export class StudyHubRepository {
         learned,
         unresolved,
         nextSession,
+        learnedImages,
       });
       if ((pending.kind ?? "completion") === "completion") {
         task.status = "completed";

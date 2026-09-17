@@ -1,4 +1,5 @@
 import { addDaysKey, parseLocalDate, toLocalDateKey } from "../utils/time.js";
+import { MAX_LEARNING_IMAGES, isLearningImageDataUrl, normalizeLearningImages } from "../utils/learningImages.js";
 
 export const SCHEMA_VERSION = 1;
 export const TASK_STATUSES = ["pending", "in_progress", "completed"];
@@ -121,6 +122,15 @@ export function validateState(candidate) {
     }
     assert(Boolean(parseLocalDate(entry.date)), "Hay un registro con fecha inválida.");
     assert(entry.createdAt === undefined || isIsoTimestamp(entry.createdAt), "Hay un registro con fecha de creación inválida.");
+    if (entry.learnedImages !== undefined) {
+      assert(Array.isArray(entry.learnedImages) && entry.learnedImages.length <= MAX_LEARNING_IMAGES, "Hay demasiadas imágenes en una reflexión.");
+      const imageIds = new Set();
+      for (const image of entry.learnedImages) {
+        assert(image && isSafeId(image.id) && !imageIds.has(image.id), "Hay imágenes de reflexión inválidas o duplicadas.");
+        imageIds.add(image.id);
+        assert(isLearningImageDataUrl(image.dataUrl), "Hay una imagen de reflexión no compatible.");
+      }
+    }
   }
 
   if (candidate.activeTimer) {
@@ -166,6 +176,7 @@ export function normalizeState(candidate) {
       learned: String(entry.learned ?? "").slice(0, 1200),
       unresolved: String(entry.unresolved ?? "").slice(0, 1200),
       nextSession: String(entry.nextSession ?? "").slice(0, 1200),
+      learnedImages: normalizeLearningImages(entry.learnedImages),
       focusSessionId: entry.focusSessionId || null,
       createdAt: isIsoTimestamp(entry.createdAt) ? entry.createdAt : session?.endedAt ?? `${entry.date}T12:00:00.000Z`,
     };

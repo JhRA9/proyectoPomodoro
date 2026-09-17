@@ -11,6 +11,16 @@ export function cleanText(value, maxLength = 160) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
 }
 
+export function cleanMultilineText(value, maxLength = 1200) {
+  return String(value ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\t\f\v]+/g, " ")
+    .replace(/ +\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, maxLength);
+}
+
 export function normalizeForSearch(value = "") {
   return String(value)
     .normalize("NFD")

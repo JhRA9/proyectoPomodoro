@@ -96,3 +96,8 @@
 .learning-table tbody th { width: 23%; color: #e8eef8; font-weight: 600; }
 .learning-table tbody th small { display: block; margin-top: 3px; color: var(--muted); font-weight: 400; }
 .learning-table tbody th .entry-task-title { margin-top: 5px; color: #dbe7f8; font-weight: 650; }
+.learned-entry-content { min-width: 0; }
+.learned-entry-content .learning-images { grid-template-columns: 1fr; margin: 0 0 9px; }
+.learned-entry-content .learning-image { padding: 3px; }
+.learned-entry-content .learning-image img { max-height: 260px; }
+.learned-entry-content > p, .learning-cell-copy { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
