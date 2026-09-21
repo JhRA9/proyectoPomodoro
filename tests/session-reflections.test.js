@@ -133,6 +133,86 @@ describe("reflections for every focus session", () => {
     expect(reloaded.getState().activeTimer?.taskId).toBe(test.task.id);
   });
 
+  it("pauses another task's running timer while completing, survives reload, and resumes without double counting", async () => {
+    const test = await setup();
+    const otherTask = await test.repository.createTask(test.project.id, {
+      title: "Estudiar archivo de los jueces",
+      description: "",
+      dueDate: null,
+      status: "pending",
+    });
+
+    await test.repository.startTimer(test.task.id);
+    const sessionId = test.repository.getState().activeTimer.sessionId;
+    test.advance(90);
+    const completion = await test.repository.setTaskStatus(otherTask.id, "completed");
+    expect(completion).toEqual({ pausedTaskTitle: test.task.title });
+
+    let state = test.repository.getState();
+    expect(state.pendingCompletion).toMatchObject({ taskId: otherTask.id, kind: "completion", focusSessionId: null });
+    expect(state.activeTimer).toMatchObject({ sessionId, taskId: test.task.id, phase: "paused", elapsedSeconds: 90 });
+    expect(state.focusSessions).toHaveLength(0);
+    expect(state.tasks.find((task) => task.id === test.task.id).accumulatedSeconds).toBe(0);
+    expect(state.tasks.find((task) => task.id === otherTask.id).status).toBe("pending");
+
+    const invalid = structuredClone(state);
+    invalid.activeTimer.phase = "running";
+    invalid.activeTimer.lastResumedAt = test.clock().toISOString();
+    expect(() => validateState(invalid)).toThrow(/reflexión pendiente/i);
+
+    const reloaded = new StudyHubRepository({ adapter: test.adapter, store: createStore(null), clock: test.clock });
+    await reloaded.initialize();
+    expect(reloaded.getState().activeTimer).toEqual(state.activeTimer);
+    expect(reloaded.getState().pendingCompletion).toEqual(state.pendingCompletion);
+
+    test.advance(600);
+    await saveReflection(reloaded, 1);
+    state = reloaded.getState();
+    expect(state.tasks.find((task) => task.id === otherTask.id).status).toBe("completed");
+    expect(state.activeTimer).toMatchObject({ sessionId, phase: "paused", elapsedSeconds: 90 });
+    expect(state.focusSessions).toHaveLength(0);
+    expect(state.learningEntries).toHaveLength(1);
+    expect(state.learningEntries[0].taskId).toBe(otherTask.id);
+
+    await reloaded.startTimer(test.task.id);
+    test.advance(30);
+    expect(await reloaded.stopTimer()).toBe(120);
+    state = reloaded.getState();
+    expect(state.focusSessions).toHaveLength(1);
+    expect(state.focusSessions[0]).toMatchObject({ id: sessionId, taskId: test.task.id, durationSeconds: 120 });
+    expect(state.tasks.find((task) => task.id === test.task.id).accumulatedSeconds).toBe(120);
+    expect(state.pendingCompletion).toMatchObject({ taskId: test.task.id, kind: "session", focusSessionId: sessionId });
+  });
+
+  it("can omit a different task's completion reflection and resume the paused timer", async () => {
+    const test = await setup();
+    const otherTask = await test.repository.createTask(test.project.id, {
+      title: "Leer capítulo",
+      description: "",
+      dueDate: null,
+      status: "pending",
+    });
+
+    await test.repository.startTimer(test.task.id);
+    test.advance(45);
+    await test.repository.requestCompletion(otherTask.id);
+    await test.repository.cancelCompletion();
+
+    let state = test.repository.getState();
+    expect(state.pendingCompletion).toBeNull();
+    expect(state.tasks.find((task) => task.id === otherTask.id).status).toBe("pending");
+    expect(state.learningEntries).toHaveLength(0);
+    expect(state.focusSessions).toHaveLength(0);
+    expect(state.activeTimer).toMatchObject({ taskId: test.task.id, phase: "paused", elapsedSeconds: 45 });
+
+    await test.repository.startTimer(test.task.id);
+    test.advance(15);
+    expect(await test.repository.stopTimer()).toBe(60);
+    state = test.repository.getState();
+    expect(state.focusSessions).toHaveLength(1);
+    expect(state.tasks.find((task) => task.id === test.task.id).accumulatedSeconds).toBe(60);
+  });
+
   it("rejects duplicate reflections for the same focus session", async () => {
     const test = await setup();
     await test.repository.startTimer(test.task.id);

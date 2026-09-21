@@ -74,6 +74,16 @@ describe("learning notes and optional reflection fields", () => {
     expect(html).toContain("opcional");
   });
 
+  it("identifies a different paused session in the completion dialog", () => {
+    const html = reflectionDialog({ id: "task-one", title: "Otra tarea" }, {}, {
+      kind: "completion",
+      activeTaskTitle: "Tesis <final>",
+    });
+    expect(html).toContain("Tesis &lt;final&gt;");
+    expect(html).toContain("quedó pausada");
+    expect(html).not.toContain("Tesis <final>");
+  });
+
   it("renders an editable notes tab first and the history as the second tab", async () => {
     const test = await setup();
     const state = test.repository.getState();

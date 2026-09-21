@@ -145,7 +145,14 @@ export function validateState(candidate) {
     if (candidate.activeTimer.phase === "paused") assert(candidate.activeTimer.lastResumedAt === null, "El cronómetro pausado contiene una marca activa.");
   }
   if (candidate.pendingCompletion) {
-    assert(!candidate.activeTimer, "No puede haber un cronómetro activo mientras existe una reflexión pendiente.");
+    if (candidate.activeTimer) {
+      assert(
+        (candidate.pendingCompletion.kind ?? "completion") === "completion"
+          && candidate.activeTimer.phase === "paused"
+          && candidate.activeTimer.taskId !== candidate.pendingCompletion.taskId,
+        "La reflexión pendiente no puede pertenecer a la sesión activa.",
+      );
+    }
     assert(taskIds.has(candidate.pendingCompletion.taskId), "La reflexión pendiente pertenece a una tarea inexistente.");
     const pendingSession = candidate.pendingCompletion.focusSessionId === null ? null : sessionsById.get(candidate.pendingCompletion.focusSessionId);
     assert(candidate.pendingCompletion.focusSessionId === null || pendingSession?.taskId === candidate.pendingCompletion.taskId, "La reflexión pendiente contiene una sesión inválida.");

@@ -66,6 +66,11 @@ function toastRegion(toasts) {
   return `<div class="toast-region" aria-live="polite" aria-atomic="true">${toasts.map((toast) => `<div class="toast ${toast.type === "error" ? "error" : ""}" data-toast-id="${toast.id}">${icon(toast.type === "error" ? "info" : "check", 18)}<span>${escapeHtml(toast.message)}</span><button class="icon-button" type="button" data-action="dismiss-toast" data-toast-id="${toast.id}" aria-label="Cerrar aviso">${icon("x", 15)}</button></div>`).join("")}</div>`;
 }
 
+function pausedOtherTaskName(state, taskId) {
+  if (state.activeTimer?.phase !== "paused" || state.activeTimer.taskId === taskId) return null;
+  return state.tasks.find((task) => task.id === state.activeTimer.taskId)?.title ?? null;
+}
+
 export class StudyHubApp {
   constructor(root, repository, store, router, context = {}) {
     this.root = root;
@@ -275,7 +280,8 @@ export class StudyHubApp {
     const editingProject = this.ui.dialog?.type === "project" ? { ...(storedProject ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const pendingTask = state.pendingCompletion ? state.tasks.find((item) => item.id === state.pendingCompletion.taskId) : null;
-    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui, this.account)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), state.pendingCompletion) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    const activeTaskTitle = pendingTask ? pausedOtherTaskName(state, pendingTask.id) : null;
+    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui, this.account)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
     this.openPendingDialog();
     this.timer.renderNow();
   }
@@ -361,8 +367,10 @@ export class StudyHubApp {
         const task = this.repository.getState().tasks.find((item) => item.id === target.dataset.taskId);
         if (task?.status === target.dataset.status) { this.render(); return; }
         if (target.dataset.status === "completed") this.captureOpenFormDraft();
-        await this.repository.setTaskStatus(target.dataset.taskId, target.dataset.status);
-        this.addToast(target.dataset.status === "completed" ? "Guarda la reflexión para completar la tarea." : "Estado actualizado.");
+        const result = await this.repository.setTaskStatus(target.dataset.taskId, target.dataset.status);
+        this.addToast(result?.pausedTaskTitle
+          ? `Sesión de “${result.pausedTaskTitle}” pausada. Guarda la reflexión para completar la tarea.`
+          : target.dataset.status === "completed" ? "Guarda la reflexión para completar la tarea." : "Estado actualizado.");
       }); break;
       case "toggle-filter": this.ui.menu = this.ui.menu?.type === "filter" ? null : { type: "filter" }; this.render(); break;
       case "set-filter": this.ui.taskFilter = target.dataset.filter; this.ui.menu = null; this.render(); break;
@@ -395,15 +403,20 @@ export class StudyHubApp {
       }); break;
       case "complete-task": await this.safely(async () => {
         this.captureOpenFormDraft();
-        await this.repository.requestCompletion(target.dataset.taskId);
-        this.addToast("Guarda la reflexión para completar la tarea.");
+        const result = await this.repository.requestCompletion(target.dataset.taskId);
+        this.addToast(result?.pausedTaskTitle
+          ? `Sesión de “${result.pausedTaskTitle}” pausada. Guarda la reflexión para completar la tarea.`
+          : "Guarda la reflexión para completar la tarea.");
       }); break;
       case "cancel-reflection": {
         const reflectionKind = state.pendingCompletion?.kind ?? "completion";
+        const pausedTask = pausedOtherTaskName(state, state.pendingCompletion?.taskId);
         this.captureOpenFormDraft();
         await this.safely(async () => {
           await this.repository.cancelCompletion();
-          this.addToast(reflectionKind === "session" ? "Reflexión omitida; la sesión y su tiempo quedaron guardados." : "La tarea sigue abierta; el tiempo ya quedó guardado.");
+          this.addToast(pausedTask
+            ? `La tarea sigue abierta. La sesión de “${pausedTask}” sigue pausada y puedes reanudarla.`
+            : reflectionKind === "session" ? "Reflexión omitida; la sesión y su tiempo quedaron guardados." : "La tarea sigue abierta; el tiempo ya quedó guardado.");
         });
         break;
       }
@@ -654,6 +667,7 @@ export class StudyHubApp {
     }
     if (form.dataset.form === "reflection") {
       const pending = this.repository.getState().pendingCompletion;
+      const pausedTask = pausedOtherTaskName(this.repository.getState(), pending?.taskId);
       const captured = this.captureLearningDraftForm(form);
       const reflectionKind = pending?.kind ?? "completion";
       const reflection = { ...data, learnedImages: captured?.draft.learnedImages ?? [] };
@@ -661,7 +675,9 @@ export class StudyHubApp {
       if (success) {
         this.clearLearningDraft(pending?.taskId);
         this.render({ skipDraftCapture: true });
-        this.addToast(reflectionKind === "session" ? "Reflexión de la sesión guardada." : "Tarea completada y reflexión guardada.");
+        this.addToast(pausedTask
+          ? `Tarea completada. La sesión de “${pausedTask}” sigue pausada y puedes reanudarla.`
+          : reflectionKind === "session" ? "Reflexión de la sesión guardada." : "Tarea completada y reflexión guardada.");
       }
     }
   }
@@ -695,11 +711,15 @@ export class StudyHubApp {
     }
     if (event.target.id === "reflection-dialog") {
       event.preventDefault();
-      const reflectionKind = this.repository.getState().pendingCompletion?.kind ?? "completion";
+      const state = this.repository.getState();
+      const reflectionKind = state.pendingCompletion?.kind ?? "completion";
+      const pausedTask = pausedOtherTaskName(state, state.pendingCompletion?.taskId);
       this.captureOpenFormDraft();
       void this.safely(async () => {
         await this.repository.cancelCompletion();
-        this.addToast(reflectionKind === "session" ? "Reflexión omitida; la sesión y su tiempo quedaron guardados." : "La tarea sigue abierta; el tiempo ya quedó guardado.");
+        this.addToast(pausedTask
+          ? `La tarea sigue abierta. La sesión de “${pausedTask}” sigue pausada y puedes reanudarla.`
+          : reflectionKind === "session" ? "Reflexión omitida; la sesión y su tiempo quedaron guardados." : "La tarea sigue abierta; el tiempo ya quedó guardado.");
       });
       return;
     }

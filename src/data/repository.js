@@ -267,11 +267,17 @@ export class StudyHubRepository {
       if (!task) throw new Error("La tarea ya no existe.");
       if (task.status === "completed") return;
       if (state.pendingCompletion) throw new Error("Guarda u omite la reflexión pendiente antes de completar la tarea.");
-      if (state.activeTimer && state.activeTimer.taskId !== taskId) throw new Error("Detén la sesión activa antes de completar otra tarea.");
       let focusSessionId = null;
+      let pausedTaskTitle = null;
       if (state.activeTimer?.taskId === taskId) {
         focusSessionId = this.finalizeTimerInState(state, now, "completed")?.id ?? null;
       } else {
+        if (state.activeTimer?.phase === "running") {
+          state.activeTimer.elapsedSeconds = activeElapsedSeconds(state.activeTimer, now.getTime());
+          state.activeTimer.phase = "paused";
+          state.activeTimer.lastResumedAt = null;
+          pausedTaskTitle = state.tasks.find((item) => item.id === state.activeTimer.taskId)?.title ?? null;
+        }
         const reflectedSessionIds = new Set(state.learningEntries.map((entry) => entry.focusSessionId).filter(Boolean));
         const latestUnreflected = state.focusSessions
           .filter((session) => session.taskId === taskId && !reflectedSessionIds.has(session.id))
@@ -279,6 +285,7 @@ export class StudyHubRepository {
         focusSessionId = latestUnreflected?.id ?? null;
       }
       state.pendingCompletion = { taskId, focusSessionId, kind: "completion", openedAt: now.toISOString() };
+      return { pausedTaskTitle };
     });
   }
 
