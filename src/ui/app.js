@@ -3,6 +3,7 @@ import { CloudStorageAdapter, SupabaseStateGateway } from "../data/cloudAdapter.
 import { StudyHubRepository } from "../data/repository.js";
 import { mountAuthGate } from "../cloud/authGate.js";
 import { StudyHubAuth, createStudyHubSupabaseClient, readSupabaseConfig } from "../cloud/supabase.js";
+import { TaskFileStore } from "../cloud/taskFiles.js";
 import { createRouter } from "../router.js";
 import { createStore } from "../state/store.js";
 import { TimerController } from "../timer/timerController.js";
@@ -31,6 +32,8 @@ function initialUiState(learningDrafts = {}) {
     pendingImport: null,
     focusLearningTab: "draft",
     learningDrafts,
+    taskFiles: null,
+    filesEnabled: false,
     settingsOpen: false,
     settingsAnchor: null,
     dimTheme: false,
@@ -79,14 +82,18 @@ export class StudyHubApp {
     this.router = router;
     this.account = context.account ?? null;
     this.auth = context.auth ?? null;
+    this.fileStore = context.fileStore ?? null;
     this.adapter = context.adapter ?? repository.adapter;
     this.migrationCandidate = context.migrationCandidate ?? null;
     this.learningDraftStore = new LearningDraftStore(context.draftStorage ?? globalThis.localStorage, this.account?.id ?? "local");
     this.ui = initialUiState(this.learningDraftStore.load());
+    this.ui.filesEnabled = Boolean(this.fileStore);
     if (this.adapter?.getStatus) this.ui.syncStatus = this.adapter.getStatus();
     this.toastCounter = 0;
     this.busy = false;
     this.searchTimer = null;
+    this.fileListRequest = 0;
+    this.fileCleanupRunning = null;
     this.lastRouteKey = null;
     this.unsubscribeStore = () => {};
     this.unsubscribeRouter = () => {};
@@ -115,11 +122,15 @@ export class StudyHubApp {
     this.unsubscribeRouter = this.router.subscribe(() => {
       this.ui.menu = null;
       this.ui.selectedDate = null;
+      this.ui.taskFiles = null;
       globalThis.scrollTo?.({ top: 0, behavior: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       this.render();
     });
     this.unsubscribeStatus = this.adapter?.subscribeStatus?.((status) => {
       this.ui.syncStatus = status;
+      if (status.state === "synced" && !status.pending) {
+        globalThis.setTimeout(() => { void this.flushTaskFileCleanup(); }, 0);
+      }
       const node = this.root.querySelector("[data-sync-state]");
       if (node) {
         node.textContent = status.message;
@@ -246,6 +257,38 @@ export class StudyHubApp {
     }
   }
 
+  async loadTaskFiles(taskId) {
+    if (!this.fileStore) return;
+    const request = ++this.fileListRequest;
+    try {
+      const items = await this.fileStore.list(taskId);
+      if (request !== this.fileListRequest || this.ui.taskFiles?.taskId !== taskId) return;
+      this.ui.taskFiles = { taskId, status: "ready", items };
+    } catch (error) {
+      if (request !== this.fileListRequest || this.ui.taskFiles?.taskId !== taskId) return;
+      this.ui.taskFiles = { taskId, status: "error", items: [], error };
+    }
+    if (this.router.current().taskId === taskId) this.render();
+  }
+
+  async flushTaskFileCleanup() {
+    if (!this.fileStore || this.fileCleanupRunning || this.adapter?.getStatus?.().state !== "synced") return;
+    this.fileCleanupRunning = this.fileStore.flushCleanup(this.repository.getState().tasks.map((task) => task.id));
+    try {
+      await this.fileCleanupRunning;
+    } catch {
+      // La limpieza se reintentará cuando vuelva a sincronizarse la cuenta.
+    } finally {
+      this.fileCleanupRunning = null;
+    }
+  }
+
+  queueTaskFileCleanup(taskIds) {
+    if (!this.fileStore || !taskIds.length) return;
+    this.fileStore.queueCleanup(taskIds);
+    void this.flushTaskFileCleanup();
+  }
+
   resolveRoute() {
     const state = this.repository.getState();
     const route = this.router.current();
@@ -269,6 +312,10 @@ export class StudyHubApp {
     const state = this.repository.getState();
     if (!state) return;
     const { route, project, task } = this.resolveRoute();
+    if (route.name === "focus" && task && this.fileStore && this.ui.taskFiles?.taskId !== task.id) {
+      this.ui.taskFiles = { taskId: task.id, status: "loading", items: [] };
+      queueMicrotask(() => { void this.loadTaskFiles(task.id); });
+    }
     const routeKey = [route.name, route.projectId, route.taskId].filter(Boolean).join(":");
     this.ui.animatePage = this.lastRouteKey !== routeKey;
     this.lastRouteKey = routeKey;
@@ -408,6 +455,29 @@ export class StudyHubApp {
           ? `Sesión de “${result.pausedTaskTitle}” pausada. Guarda la reflexión para completar la tarea.`
           : "Guarda la reflexión para completar la tarea.");
       }); break;
+      case "retry-task-files": {
+        if (!this.fileStore || route.taskId !== target.dataset.taskId) break;
+        this.ui.taskFiles = { taskId: route.taskId, status: "loading", items: [] };
+        this.render();
+        void this.loadTaskFiles(route.taskId);
+        break;
+      }
+      case "download-task-file": await this.safely(async () => {
+        const taskId = target.dataset.taskId;
+        const file = this.ui.taskFiles?.taskId === taskId
+          ? this.ui.taskFiles.items.find((item) => item.key === target.dataset.fileKey)
+          : null;
+        if (!this.fileStore || route.taskId !== taskId || !file) throw new Error("El archivo ya no está disponible en esta tarea.");
+        const blob = await this.fileStore.download(taskId, file.key, file.updatedAt);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = file.name;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        globalThis.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }); break;
       case "cancel-reflection": {
         const reflectionKind = state.pendingCompletion?.kind ?? "completion";
         const pausedTask = pausedOtherTaskName(state, state.pendingCompletion?.taskId);
@@ -455,7 +525,7 @@ export class StudyHubApp {
       case "toggle-theme": this.ui.dimTheme = !this.ui.dimTheme; this.render(); break;
       case "export-backup": this.exportBackup(); this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
       case "import-backup": this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.root.querySelector("#backup-file")?.click(); break;
-      case "reset-data": this.ui.confirm = { type: "reset", title: "¿Empezar desde cero?", message: this.account ? "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de esta cuenta en la nube y en este dispositivo." : "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de este dispositivo.", confirmLabel: "Limpiar datos" }; this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
+      case "reset-data": this.ui.confirm = { type: "reset", title: "¿Empezar desde cero?", message: this.account ? "Se eliminarán todos los proyectos, tareas, sesiones, reflexiones y archivos adjuntos de esta cuenta. La limpieza de archivos se completará al sincronizar." : "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de este dispositivo.", confirmLabel: "Limpiar datos" }; this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
       case "cancel-confirm": this.ui.confirm = null; this.ui.pendingImport = null; this.render(); break;
       case "confirm-action": await this.confirmAction(); break;
       case "dismiss-toast": this.ui.toasts = this.ui.toasts.filter((toast) => toast.id !== target.dataset.toastId); this.renderToasts(); break;
@@ -477,23 +547,32 @@ export class StudyHubApp {
       this.ui.confirm = null;
       if (current.type === "delete-project") {
         const taskIds = this.repository.getState().tasks.filter((task) => task.projectId === current.id).map((task) => task.id);
+        if (taskIds.includes(this.repository.getState().activeTimer?.taskId)) throw new Error("Detén el cronómetro antes de eliminar este proyecto.");
         await this.repository.deleteProject(current.id);
+        this.queueTaskFileCleanup(taskIds);
         taskIds.forEach((taskId) => this.clearLearningDraft(taskId));
         if (this.router.current().projectId === current.id) this.router.navigate("projects");
         this.addToast("Proyecto eliminado.");
       } else if (current.type === "delete-task") {
         const task = this.repository.getState().tasks.find((item) => item.id === current.id);
+        if (this.repository.getState().activeTimer?.taskId === current.id) throw new Error("Detén el cronómetro antes de eliminar esta tarea.");
         await this.repository.deleteTask(current.id);
+        this.queueTaskFileCleanup([current.id]);
         this.clearLearningDraft(current.id);
         if (this.router.current().taskId === current.id) this.router.navigate(`projects/${task.projectId}`);
         this.addToast("Tarea eliminada.");
       } else if (current.type === "reset") {
+        const taskIds = this.repository.getState().tasks.map((task) => task.id);
         await this.repository.resetAll();
+        this.queueTaskFileCleanup(taskIds);
         this.clearAllLearningDrafts();
         this.router.navigate("projects");
         this.addToast("Tu espacio quedó vacío.");
       } else if (current.type === "import") {
+        const previousTaskIds = this.repository.getState().tasks.map((task) => task.id);
         await this.repository.importEnvelope(this.ui.pendingImport);
+        const importedTaskIds = new Set(this.repository.getState().tasks.map((task) => task.id));
+        this.queueTaskFileCleanup(previousTaskIds.filter((id) => !importedTaskIds.has(id)));
         this.clearAllLearningDrafts();
         this.ui.pendingImport = null;
         this.router.navigate("projects");
@@ -604,6 +683,33 @@ export class StudyHubApp {
   }
 
   async handleChange(event) {
+    if (event.target.dataset.input === "task-files") {
+      const taskId = event.target.dataset.taskId;
+      const files = [...(event.target.files ?? [])];
+      event.target.value = "";
+      if (!files.length) return;
+      await this.safely(async () => {
+        if (!this.fileStore || !this.repository.getState().tasks.some((task) => task.id === taskId)) {
+          throw new Error("Abre una tarea de tu cuenta para adjuntar archivos.");
+        }
+        let uploaded = 0;
+        let replaced = 0;
+        let firstError = null;
+        for (const file of files) {
+          try {
+            const result = await this.fileStore.upload(taskId, file);
+            if (result.kind === "updated") replaced += 1;
+            else uploaded += 1;
+          } catch (error) {
+            firstError ??= error;
+          }
+        }
+        await this.loadTaskFiles(taskId);
+        if (uploaded || replaced) this.addToast(`${uploaded} ${uploaded === 1 ? "archivo añadido" : "archivos añadidos"}${replaced ? ` · ${replaced} ${replaced === 1 ? "actualizado" : "actualizados"}` : ""}.`);
+        if (firstError) throw firstError;
+      });
+      return;
+    }
     if (event.target.dataset.input === "learning-images") {
       const form = event.target.closest('form[data-form="learning-draft"], form[data-form="reflection"]');
       await this.addLearningImageFiles(form, event.target.files ?? []);
@@ -616,7 +722,7 @@ export class StudyHubApp {
       try {
         const envelope = JSON.parse(await file.text());
         this.ui.pendingImport = envelope;
-        this.ui.confirm = { type: "import", title: "¿Restaurar esta copia?", message: "Los datos actuales serán reemplazados. Si la copia tenía un cronómetro activo, se restaurará en pausa.", confirmLabel: "Restaurar copia" };
+        this.ui.confirm = { type: "import", title: "¿Restaurar esta copia?", message: this.fileStore ? "Los datos actuales serán reemplazados. La copia JSON no incluye archivos: los adjuntos de tareas conservadas permanecerán y los de tareas eliminadas se limpiarán al sincronizar. Si había un cronómetro activo, se restaurará en pausa." : "Los datos actuales serán reemplazados. Si la copia tenía un cronómetro activo, se restaurará en pausa.", confirmLabel: "Restaurar copia" };
         this.render();
       } catch {
         this.addToast("El archivo no contiene JSON válido.", "error");
@@ -729,7 +835,7 @@ export class StudyHubApp {
   }
 }
 
-async function mountStudyHub(root, { adapter, account = null, auth = null }) {
+async function mountStudyHub(root, { adapter, account = null, auth = null, fileStore = null }) {
   const store = createStore(null);
   const repository = new StudyHubRepository({ adapter, store });
   const init = await repository.initialize();
@@ -737,6 +843,7 @@ async function mountStudyHub(root, { adapter, account = null, auth = null }) {
   const app = new StudyHubApp(root, repository, store, router, {
     account,
     auth,
+    fileStore,
     adapter,
     migrationCandidate: init.migrationCandidate ?? null,
   });
@@ -766,6 +873,9 @@ export async function createApp(root, dependencies = {}) {
       adapter,
       account: { id: userId, email: session.user.email ?? "" },
       auth,
+      fileStore: dependencies.fileStoreFactory
+        ? dependencies.fileStoreFactory({ client, userId })
+        : new TaskFileStore(client, userId),
     });
   };
 

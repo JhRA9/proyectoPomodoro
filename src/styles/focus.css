@@ -58,6 +58,23 @@
 .session-summary span, .session-summary strong { display: block; }
 .session-summary span { color: #8fa3bf; font-size: .65rem; }
 .session-summary strong { margin-top: 4px; font-size: .8rem; }
+.task-files { margin-top: 15px; padding-top: 14px; border-top: 1px solid #46617f; text-align: left; }
+.task-files > header { min-height: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.task-files h3 { margin: 0; font-size: .82rem; }
+.task-file-picker { position: relative; display: inline-flex; align-items: center; gap: 5px; flex: none; min-height: 31px; padding: 0 9px; border: 1px solid #316cb8; border-radius: 8px; color: #d9eaff; background: rgba(31,100,191,.28); font-size: .68rem; font-weight: 750; cursor: pointer; }
+.task-file-picker:hover { border-color: #4f94ed; background: rgba(31,100,191,.42); }
+.task-file-picker:focus-within { outline: 2px solid #7eb7ff; outline-offset: 2px; }
+.task-files-note, .task-files-message { margin: 8px 0 0; color: #8fa3bf; font-size: .68rem; line-height: 1.45; }
+.task-files-message.error { color: #ff9aa6; }
+.task-files-message button { padding: 0; border: 0; color: #82b6ff; background: none; font: inherit; font-weight: 700; cursor: pointer; }
+.task-files-list { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.task-files-list li { min-width: 0; display: grid; grid-template-columns: 22px minmax(0,1fr) 31px; align-items: center; gap: 7px; padding: 7px; border: 1px solid #2a425f; border-radius: 8px; background: rgba(5,15,27,.42); }
+.task-file-icon { color: #82b6ff; }
+.task-file-details { min-width: 0; }
+.task-file-details strong { display: block; overflow: hidden; color: #e5eefb; font-size: .7rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.task-file-details small { color: #849bb9; font-size: .62rem; }
+.task-file-download { width: 31px; height: 31px; display: grid; place-items: center; padding: 0; border: 1px solid #304b69; border-radius: 7px; color: #a8d0ff; background: rgba(29,63,105,.28); cursor: pointer; }
+.task-file-download:hover { border-color: #64a3ed; background: rgba(29,99,177,.32); }
 .task-learning { padding: 14px; }
 .task-learning > header { align-items: flex-start; margin-bottom: 10px; }
 .task-learning .learning-table { min-width: 520px; }

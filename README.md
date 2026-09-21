@@ -57,6 +57,7 @@ La navegación usa rutas hash (`#/projects/...`), por lo que una recarga directa
 - **Modo enfoque:** abre una tarea y elige **Sin límite** para contar desde cero hasta que la detengas, o **Con tiempo** para escribir cualquier combinación válida de horas y minutos. La cuenta regresiva conserva el tiempo extra si continúas después de llegar a cero. Pausar no guarda una sesión; detener guarda exactamente el tramo pendiente y abre una reflexión opcional. Puedes omitirla sin perder el tiempo.
 - **Reflexiones por sesión:** cada reflexión queda asociada a su sesión y aparece inmediatamente como `Sesión 1`, `Sesión 2`, etc. en la tarea y como `Clase 1`, `Clase 2`, etc. en el registro general del proyecto.
 - **Completar:** primero guarda cualquier tiempo pendiente y abre el mismo formulario. La tarea solo se completa después de guardar la reflexión final; las sesiones y reflexiones anteriores se conservan.
+- **Archivos de una tarea:** con una cuenta conectada a Supabase, abre la tarea en modo enfoque y usa **Adjuntar**. Es opcional, admite varios documentos de hasta 20 MB cada uno y muestra los archivos de esa tarea con un botón para descargarlos. Subir de nuevo un archivo con el mismo nombre sustituye la versión anterior, sin crear un duplicado.
 - **Copias:** usa **Exportar copia** e **Importar copia** desde la barra lateral o el menú del perfil. La importación valida la versión antes de reemplazar los datos.
 - **Empezar de cero:** los datos de ejemplo iniciales están identificados. Puedes limpiarlos desde el aviso o desde Ajustes.
 
@@ -72,6 +73,7 @@ La fuente de verdad está separada de la interfaz:
 - Al exportar un cronómetro activo, la copia lo convierte en una instantánea pausada para evitar tiempo fantasma al restaurarla.
 - La importación JSON reemplaza el estado validado y lo sincroniza también con la nube.
 - Si no hay conexión, los cambios quedan en una cola local y se reintentan al volver a estar en línea.
+- Los adjuntos se guardan en un bucket privado de Supabase Storage, separado por usuario y tarea. No se incrustan en el estado JSON ni en las copias exportadas; se descargan solo cuando se solicitan. Subir, listar, descargar o borrar una tarea con adjuntos requiere conexión.
 
 Los datos cloud se almacenan en Supabase Postgres y se recuperan al iniciar sesión desde otro dispositivo. El `localStorage` legado nunca se borra automáticamente: en el primer acceso a una cuenta cloud vacía, StudyHub pregunta si debe migrarlo.
 

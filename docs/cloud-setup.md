@@ -14,9 +14,11 @@ cola temporal, pero Supabase debe ser la fuente principal cuando hay conexion.
 
 ## 2. Aplicar la migracion
 
-La migracion se encuentra en:
+Las migraciones se encuentran en:
 
 `supabase/migrations/202609160001_create_studyhub_states.sql`
+
+`supabase/migrations/202609210001_create_task_files_bucket.sql`
 
 Puede aplicarse con Supabase CLI, despues de autenticar y enlazar el proyecto:
 
@@ -26,8 +28,11 @@ supabase link --project-ref TU_PROJECT_REF
 supabase db push
 ```
 
-Como alternativa, copia el contenido de la migracion en el SQL Editor del
-Dashboard y ejecutalo una sola vez.
+Como alternativa, copia el contenido de cada migracion en el SQL Editor del
+Dashboard y ejecutalas en orden una sola vez. La segunda crea un bucket privado
+para los adjuntos opcionales y politicas de Storage que limitan cada ruta al
+usuario autenticado. Cada archivo se almacena en `user_id/task_id/clave`, con
+un limite de 20 MB. Subir el mismo nombre vuelve a escribir esa ruta.
 
 La tabla resultante contiene un unico snapshot por usuario:
 
@@ -96,6 +101,9 @@ La migracion aplica estas defensas:
 - al eliminar un usuario de Auth se elimina su snapshot mediante `ON DELETE
   CASCADE`;
 - `state` debe ser un objeto JSON y `revision` no puede ser negativa.
+- El bucket de adjuntos no es publico. Las politicas `SELECT`, `INSERT`,
+  `UPDATE` y `DELETE` de `storage.objects` solo permiten rutas cuyo primer
+  segmento coincide con `auth.uid()`.
 
 No utilices `sb_secret_...`, la clave legacy `service_role`, la contrasena de
 Postgres ni un token personal de Supabase en el frontend, en `.env.example` o en
@@ -114,3 +122,10 @@ Despues de integrar el cliente de Supabase, valida lo siguiente con dos cuentas:
 5. cerrar y abrir sesion en otro navegador recupera el snapshot cloud;
 6. estando sin conexion, la interfaz usa la cache local y sincroniza la cola al
    recuperar la conexion.
+7. la cuenta A puede adjuntar y descargar un archivo de su tarea y reemplazarlo
+   subiendo otro con el mismo nombre;
+8. la cuenta B no puede listar, descargar, modificar ni borrar los adjuntos de
+   la cuenta A.
+
+Los archivos binarios no forman parte de las copias JSON exportadas desde la
+aplicacion. Respaldalos por separado si necesitas una copia fuera de Supabase.
