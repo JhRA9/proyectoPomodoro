@@ -84,6 +84,17 @@
 .reflection-dialog .learning-image-picker { margin: 0; color: #71adff; font-size: .65rem; }
 .form-hint { margin: 15px 0 0; padding: 10px 12px; color: #a9c8f6; border-radius: 9px; background: rgba(34,111,219,.12); font-size: .78rem; }
 .field-note { margin: 8px 0 0; color: var(--muted-2); font-size: .75rem; }
+.task-create-files { margin-top: 18px; padding: 14px; border: 1px solid #2c4260; border-radius: 11px; background: rgba(8,22,38,.42); }
+.task-create-files > p { margin: 0 0 10px; color: #d8e3f4; font-size: .85rem; font-weight: 650; }
+.task-create-files > p span { color: var(--muted-2); font-weight: 400; }
+.app-dialog .task-create-file-picker { width: fit-content; min-height: 36px; display: inline-flex; align-items: center; gap: 7px; margin: 0; padding: 0 11px; border: 1px solid #316cb8; border-radius: 8px; color: #d9eaff; background: rgba(31,100,191,.28); font-size: .76rem; font-weight: 700; cursor: pointer; }
+.task-create-file-picker:hover { border-color: #4f94ed; background: rgba(31,100,191,.42); }
+.task-create-file-picker:focus-within { outline: 2px solid #7eb7ff; outline-offset: 2px; }
+.app-dialog .task-create-file-picker input.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+.task-create-files > small { display: block; margin-top: 9px; color: var(--muted-2); font-size: .7rem; line-height: 1.4; }
+.task-create-files-selected { margin-top: 8px; color: #9fb3ce; font-size: .72rem; overflow-wrap: anywhere; }
+.task-create-files-selected ul { max-height: 80px; margin: 0; padding-left: 18px; overflow: auto; }
+.task-create-files-selected li + li { margin-top: 3px; }
 .confirm-dialog { text-align: center; }
 .confirm-dialog h2 { margin: 13px 0 8px; }
 .confirm-dialog p { margin: 0; color: var(--muted); line-height: 1.55; }

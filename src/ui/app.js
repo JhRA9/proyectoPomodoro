@@ -328,7 +328,7 @@ export class StudyHubApp {
     const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const pendingTask = state.pendingCompletion ? state.tasks.find((item) => item.id === state.pendingCompletion.taskId) : null;
     const activeTaskTitle = pendingTask ? pausedOtherTaskName(state, pendingTask.id) : null;
-    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui, this.account)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui, this.account)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask, { filesEnabled: this.ui.filesEnabled, selectedFiles: this.ui.dialog.files ?? [] }) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
     this.openPendingDialog();
     this.timer.renderNow();
   }
@@ -683,6 +683,16 @@ export class StudyHubApp {
   }
 
   async handleChange(event) {
+    if (event.target.dataset.input === "new-task-files") {
+      if (this.ui.dialog?.type !== "task" || this.ui.dialog.id) return;
+      const files = [...(event.target.files ?? [])];
+      this.ui.dialog.files = files;
+      const selected = event.target.closest(".task-create-files")?.querySelector("[data-selected-task-files]");
+      if (selected) selected.innerHTML = files.length
+        ? `<ul>${files.map((file) => `<li>${escapeHtml(file.name)}</li>`).join("")}</ul>`
+        : "Ningún archivo seleccionado";
+      return;
+    }
     if (event.target.dataset.input === "task-files") {
       const taskId = event.target.dataset.taskId;
       const files = [...(event.target.files ?? [])];
@@ -760,15 +770,33 @@ export class StudyHubApp {
     }
     if (form.dataset.form === "task") {
       this.ui.dialog = { ...this.ui.dialog, draft: data };
+      const files = form.dataset.taskId ? [] : [...(this.ui.dialog.files ?? [])];
+      let createdTask = null;
       const success = await this.safely(async () => {
         const isEdit = Boolean(form.dataset.taskId);
         if (isEdit) await this.repository.updateTask(form.dataset.taskId, data);
-        else await this.repository.createTask(form.dataset.projectId, data);
+        else createdTask = await this.repository.createTask(form.dataset.projectId, data);
       });
       if (success) {
         this.ui.dialog = null;
         this.render();
         this.addToast(form.dataset.taskId ? "Tarea actualizada." : "Tarea creada.");
+        if (createdTask && files.length && this.fileStore) {
+          await this.safely(async () => {
+            let uploaded = 0;
+            let failed = 0;
+            for (const file of files) {
+              try {
+                await this.fileStore.upload(createdTask.id, file);
+                uploaded += 1;
+              } catch {
+                failed += 1;
+              }
+            }
+            if (uploaded) this.addToast(`${uploaded} ${uploaded === 1 ? "archivo adjuntado" : "archivos adjuntados"} a la tarea.`);
+            if (failed) throw new Error(`La tarea se creó, pero ${failed} ${failed === 1 ? "archivo no se pudo adjuntar" : "archivos no se pudieron adjuntar"}. Ábrela para reintentar la carga.`);
+          });
+        }
       }
     }
     if (form.dataset.form === "reflection") {
