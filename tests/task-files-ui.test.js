@@ -29,7 +29,7 @@ describe("task attachments in the focus view", () => {
       animatePage: false, taskFilter: "all", menu: null, focusLearningTab: "draft", learningDrafts: {}, filesEnabled: false,
     });
 
-    expect(html).toContain("Se entrega el 24 de septiembre de 2026 a las 16:20");
+    expect(html).toContain("Se entrega el 24 de septiembre de 2026 a las 4:20 PM");
   });
 
   it("does not show the cloud-only attachments panel in local mode", () => {

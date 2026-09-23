@@ -66,8 +66,8 @@ describe("collapsible application sidebars", () => {
     expect(html).toContain("Revisar bibliografía");
     expect(html).not.toContain("Ya terminada");
     expect(html).toContain("Sin fecha");
-    expect(html).toContain("Vence hoy · 14:30");
-    expect(html).toContain("Vence mañana · 18:45");
+    expect(html).toContain("Vence hoy · 2:30 PM");
+    expect(html).toContain("Vence mañana · 6:45 PM");
 
     const overdueSection = html.slice(html.indexOf('id="due-overdue-title"'), html.indexOf('id="due-today-title"'));
     const todaySection = html.slice(html.indexOf('id="due-today-title"'), html.indexOf('id="due-tomorrow-title"'));

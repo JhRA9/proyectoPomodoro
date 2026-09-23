@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { calendarCells, differenceInCalendarDays, dueCategory, formatDuration, formatElapsedTimer, formatFocusTimer, formatTimer, parseLocalDate } from "../src/utils/time.js";
+import { calendarCells, differenceInCalendarDays, dueCategory, formatDuration, formatElapsedTimer, formatFocusTimer, formatTime, formatTimer, parseLocalDate } from "../src/utils/time.js";
 
 describe("date and time utilities", () => {
+  it("formats task deadlines with a 12-hour clock", () => {
+    expect(formatTime("00:05")).toBe("12:05 AM");
+    expect(formatTime("12:00")).toBe("12:00 PM");
+    expect(formatTime("18:45")).toBe("6:45 PM");
+    expect(formatTime("invalid")).toBe("");
+  });
+
   it("parses local calendar dates without accepting invalid days", () => {
     expect(parseLocalDate("2024-02-29")).toBeInstanceOf(Date);
     expect(parseLocalDate("2025-02-29")).toBeNull();

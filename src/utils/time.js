@@ -49,8 +49,12 @@ export function formatDate(dateKey, options = {}) {
 }
 
 export function formatTime(timeValue) {
-  const match = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(String(timeValue ?? ""));
-  return match ? match[0] : "";
+  const value = String(timeValue ?? "");
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) return "";
+  const [hours, minutes] = value.split(":").map(Number);
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${String(minutes).padStart(2, "0")} ${period}`;
 }
 
 export function dueDateTimeLabel(task, options = {}) {
