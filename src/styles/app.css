@@ -96,7 +96,7 @@
 .global-task-copy strong { font-size: .78rem; }
 .global-task-copy small { margin-top: 4px; color: #8195b1; font-size: .68rem; }
 .global-task-meta { display: flex; align-items: center; gap: 6px; justify-self: end; color: #8ca2be; }
-.global-task-meta small { max-width: 82px; font-size: .67rem; text-align: right; }
+.global-task-meta small { max-width: 96px; font-size: .67rem; line-height: 1.3; text-align: right; }
 .global-task-meta i { width: 7px; height: 7px; border-radius: 50%; background: #2789ff; box-shadow: 0 0 9px rgba(39,137,255,.7); }
 .global-task-card.due-overdue .global-task-meta, .global-task-card.due-urgent .global-task-meta { color: #ff7183; }
 .global-task-card.due-soon .global-task-meta { color: #ffc54f; }

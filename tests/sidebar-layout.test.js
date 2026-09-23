@@ -46,7 +46,8 @@ describe("collapsible application sidebars", () => {
       projects: [{ id: "project-a", name: "Grado", color: "#2f8cff", icon: "folder" }],
       tasks: [
         { id: "overdue", projectId: "project-a", title: "Entrega vencida", status: "pending", dueDate: "2026-09-22", createdAt: "2026-09-01" },
-        { id: "tomorrow", projectId: "project-a", title: "Entrega mañana", status: "in_progress", dueDate: "2026-09-24", createdAt: "2026-09-01" },
+        { id: "today", projectId: "project-a", title: "Entrega de hoy", status: "pending", dueDate: "2026-09-23", dueTime: "14:30", createdAt: "2026-09-01" },
+        { id: "tomorrow", projectId: "project-a", title: "Entrega mañana", status: "in_progress", dueDate: "2026-09-24", dueTime: "18:45", createdAt: "2026-09-01" },
         { id: "three", projectId: "project-a", title: "Entrega en tres días", status: "pending", dueDate: "2026-09-26", createdAt: "2026-09-01" },
         { id: "week", projectId: "project-a", title: "Entrega próxima semana", status: "pending", dueDate: "2026-09-29", createdAt: "2026-09-01" },
         { id: "later", projectId: "project-a", title: "Entrega posterior", status: "pending", dueDate: "2026-10-10", createdAt: "2026-09-01" },
@@ -56,7 +57,8 @@ describe("collapsible application sidebars", () => {
     };
     const html = globalTasksPanel(state, new Date(2026, 8, 23, 12));
 
-    expect(html).toContain("Vencidas y hoy");
+    expect(html).toContain("Vencidas");
+    expect(html).toContain("Se entregan hoy");
     expect(html).toContain("Vence mañana");
     expect(html).toContain("Próximos 3 días");
     expect(html).toContain("Próxima semana");
@@ -64,9 +66,18 @@ describe("collapsible application sidebars", () => {
     expect(html).toContain("Revisar bibliografía");
     expect(html).not.toContain("Ya terminada");
     expect(html).toContain("Sin fecha");
+    expect(html).toContain("Vence hoy · 14:30");
+    expect(html).toContain("Vence mañana · 18:45");
+
+    const overdueSection = html.slice(html.indexOf('id="due-overdue-title"'), html.indexOf('id="due-today-title"'));
+    const todaySection = html.slice(html.indexOf('id="due-today-title"'), html.indexOf('id="due-tomorrow-title"'));
+    expect(overdueSection).toContain("Entrega vencida");
+    expect(overdueSection).not.toContain("Entrega de hoy");
+    expect(todaySection).toContain("Entrega de hoy");
+    expect(todaySection).not.toContain("Entrega vencida");
 
     const nextDayHtml = globalTasksPanel(state, new Date(2026, 8, 24, 12));
-    const urgentSection = nextDayHtml.slice(nextDayHtml.indexOf('id="due-now-title"'), nextDayHtml.indexOf('id="due-tomorrow-title"'));
-    expect(urgentSection).toContain("Entrega mañana");
+    const nextTodaySection = nextDayHtml.slice(nextDayHtml.indexOf('id="due-today-title"'), nextDayHtml.indexOf('id="due-tomorrow-title"'));
+    expect(nextTodaySection).toContain("Entrega mañana");
   });
 });

@@ -84,6 +84,7 @@
 .reflection-dialog .learning-image-picker { margin: 0; color: #71adff; font-size: .65rem; }
 .form-hint { margin: 15px 0 0; padding: 10px 12px; color: #a9c8f6; border-radius: 9px; background: rgba(34,111,219,.12); font-size: .78rem; }
 .field-note { margin: 8px 0 0; color: var(--muted-2); font-size: .75rem; }
+.task-deadline-fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
 .task-create-files { margin-top: 18px; padding: 14px; border: 1px solid #2c4260; border-radius: 11px; background: rgba(8,22,38,.42); }
 .task-create-files > p { margin: 0 0 10px; color: #d8e3f4; font-size: .85rem; font-weight: 650; }
 .task-create-files > p span { color: var(--muted-2); font-weight: 400; }

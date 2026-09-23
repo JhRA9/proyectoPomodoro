@@ -15,6 +15,7 @@
 .timer-panel > header small { color: var(--muted); }
 .timer-panel > header h2 { margin: 4px 0; font-size: 1.25rem; }
 .timer-panel > header p { margin: 0; color: #c0cbdb; font-size: .76rem; }
+.timer-panel > header .focus-task-deadline { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 7px; color: #80b8ff; font-weight: 650; }
 .timer-config { width: min(100%,320px); min-height: 108px; margin: 8px auto 0; text-align: left; }
 .timer-config fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .timer-config legend { width: 100%; margin-bottom: 5px; color: #9eb1cb; font-size: .7rem; font-weight: 700; }

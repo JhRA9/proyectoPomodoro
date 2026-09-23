@@ -84,6 +84,18 @@ describe("StudyHubRepository timer", () => {
 });
 
 describe("StudyHubRepository data operations", () => {
+  it("stores an optional due time and clears it when the date is removed", async () => {
+    const test = await setup();
+    await test.repository.updateTask(test.task.id, { title: test.task.title, description: "", dueDate: "2026-09-30", dueTime: "18:45" });
+    let task = test.repository.getState().tasks.find((item) => item.id === test.task.id);
+    expect(task.dueTime).toBe("18:45");
+
+    await test.repository.updateTask(test.task.id, { title: test.task.title, description: "", dueDate: null, dueTime: "18:45" });
+    task = test.repository.getState().tasks.find((item) => item.id === test.task.id);
+    expect(task.dueDate).toBeNull();
+    expect(task.dueTime).toBeNull();
+  });
+
   it("deletes a project even when one of its tasks owns the active timer", async () => {
     const test = await setup();
     await test.repository.startTimer(test.task.id);

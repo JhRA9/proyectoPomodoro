@@ -48,6 +48,18 @@ export function formatDate(dateKey, options = {}) {
   }).format(date);
 }
 
+export function formatTime(timeValue) {
+  const match = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(String(timeValue ?? ""));
+  return match ? match[0] : "";
+}
+
+export function dueDateTimeLabel(task, options = {}) {
+  if (!task?.dueDate) return "Sin fecha límite";
+  const date = formatDate(task.dueDate, options);
+  const time = formatTime(task.dueTime);
+  return time ? `${date} a las ${time}` : date;
+}
+
 export function relativeDueLabel(dateKey, now = new Date()) {
   const days = differenceInCalendarDays(dateKey, now);
   if (days < -1) return `Venció hace ${Math.abs(days)} días`;

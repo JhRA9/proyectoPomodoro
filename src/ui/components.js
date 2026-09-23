@@ -1,6 +1,6 @@
 import { PROJECT_COLORS, PROJECT_ICONS } from "../data/schema.js";
 import { projectStats } from "../state/selectors.js";
-import { differenceInCalendarDays, dueCategory, formatDate, formatDuration, relativeDueLabel } from "../utils/time.js";
+import { differenceInCalendarDays, dueCategory, formatDate, formatDuration, formatTime, relativeDueLabel } from "../utils/time.js";
 import { escapeHtml } from "../utils/text.js";
 import { MAX_LEARNING_IMAGES, normalizeLearningImages } from "../utils/learningImages.js";
 import { icon } from "./icons.js";
@@ -101,10 +101,13 @@ export function dueNotice(tasks) {
 function globalTaskCard(task, project, now) {
   const dateClass = task.dueDate ? `due-${dueCategory(task, now)}` : "";
   const statusLabel = task.status === "in_progress" ? "En curso" : "Pendiente";
+  const dueLabel = task.dueDate
+    ? `${relativeDueLabel(task.dueDate, now)}${formatTime(task.dueTime) ? ` · ${formatTime(task.dueTime)}` : ""}`
+    : statusLabel;
   return `<button class="global-task-card ${dateClass}" type="button" data-action="open-global-task" data-project-id="${escapeHtml(task.projectId)}" data-task-id="${escapeHtml(task.id)}" aria-label="Abrir ${escapeHtml(task.title)}">
     <span class="global-task-project" style="--project:${escapeHtml(project?.color || "#2f8cff")}">${icon(project?.icon || "folder", 16)}</span>
     <span class="global-task-copy"><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(project?.name || "Proyecto")}</small></span>
-    <span class="global-task-meta"><small>${task.dueDate ? escapeHtml(relativeDueLabel(task.dueDate, now)) : statusLabel}</small>${task.status === "in_progress" ? `<i title="En curso"></i>` : ""}</span>
+    <span class="global-task-meta"><small>${escapeHtml(dueLabel)}</small>${task.status === "in_progress" ? `<i title="En curso"></i>` : ""}</span>
   </button>`;
 }
 
@@ -113,7 +116,7 @@ export function globalTasksPanel(state, now = new Date()) {
   const openTasks = state.tasks.filter((task) => task.status !== "completed");
   const dated = openTasks
     .filter((task) => task.dueDate)
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || String(a.dueTime || "23:59").localeCompare(String(b.dueTime || "23:59")) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   const undated = openTasks
     .filter((task) => !task.dueDate)
     .sort((a, b) => Number(b.status === "in_progress") - Number(a.status === "in_progress") || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
@@ -121,7 +124,8 @@ export function globalTasksPanel(state, now = new Date()) {
     ? `<div class="global-task-list">${tasks.map((task) => globalTaskCard(task, projects.get(task.projectId), now)).join("")}</div>`
     : `<p class="global-tasks-empty">${emptyMessage}</p>`;
   const datedGroups = [
-    { id: "due-now", title: "Vencidas y hoy", tasks: dated.filter((task) => differenceInCalendarDays(task.dueDate, now) <= 0), empty: "No hay tareas vencidas ni para hoy." },
+    { id: "due-overdue", title: "Vencidas", tasks: dated.filter((task) => differenceInCalendarDays(task.dueDate, now) < 0), empty: "No tienes tareas vencidas." },
+    { id: "due-today", title: "Se entregan hoy", tasks: dated.filter((task) => differenceInCalendarDays(task.dueDate, now) === 0), empty: "No hay entregas para hoy." },
     { id: "due-tomorrow", title: "Vence mañana", tasks: dated.filter((task) => differenceInCalendarDays(task.dueDate, now) === 1), empty: "Nada vence mañana." },
     { id: "due-three-days", title: "Próximos 3 días", tasks: dated.filter((task) => { const days = differenceInCalendarDays(task.dueDate, now); return days >= 2 && days <= 3; }), empty: "No hay entregas en los próximos 3 días." },
     { id: "due-next-week", title: "Próxima semana", tasks: dated.filter((task) => { const days = differenceInCalendarDays(task.dueDate, now); return days >= 4 && days <= 7; }), empty: "No hay entregas para la próxima semana." },
@@ -185,7 +189,7 @@ export function projectFormDialog(project = null) {
 export function taskFormDialog(projectId, task = null, { filesEnabled = false, selectedFiles = [] } = {}) {
   const isEdit = Boolean(task?.id);
   const filesField = !isEdit && filesEnabled ? `<div class="task-create-files"><p>Archivos adjuntos <span>opcional</span></p><label class="task-create-file-picker">${icon("upload", 17)} Elegir archivos<input class="sr-only" type="file" multiple data-input="new-task-files" aria-label="Elegir archivos para la nueva tarea" /></label><small>Hasta 20 MB por archivo. Puedes añadirlos también después de crear la tarea.</small><div class="task-create-files-selected" data-selected-task-files aria-live="polite">${selectedFiles.length ? `<ul>${selectedFiles.map((file) => `<li>${escapeHtml(file.name)}</li>`).join("")}</ul>` : "Ningún archivo seleccionado"}</div></div>` : "";
-  return `<dialog class="app-dialog" id="task-dialog" aria-labelledby="task-dialog-title"><form data-form="task" data-project-id="${escapeHtml(projectId)}" data-task-id="${escapeHtml(task?.id ?? "")}"><div class="dialog-heading"><div><p class="eyebrow">Plan de estudio</p><h2 id="task-dialog-title">${isEdit ? "Editar tarea" : "Nueva tarea"}</h2></div><button class="icon-button" type="button" data-action="close-dialog" aria-label="Cerrar">${icon("x")}</button></div><label>Nombre de la tarea<input name="title" maxlength="100" required value="${escapeHtml(task?.title ?? "")}" placeholder="Ej. Resolver ejercicios" autofocus /></label><label>Descripción <span>opcional</span><textarea name="description" maxlength="500" rows="3" placeholder="Añade contexto o pasos importantes">${escapeHtml(task?.description ?? "")}</textarea></label><label>Fecha límite <span>opcional</span><input name="dueDate" type="date" value="${escapeHtml(task?.dueDate ?? "")}" /></label>${isEdit ? "" : `<label>Estado<select name="status"><option value="pending" ${task?.status === "pending" || !task?.status ? "selected" : ""}>Pendiente</option><option value="in_progress" ${task?.status === "in_progress" ? "selected" : ""}>En curso</option></select></label><p class="field-note">Para marcarla como completada, guarda primero una reflexión.</p>`}${filesField}<div class="dialog-actions"><button class="secondary-button" type="button" data-action="close-dialog">Cancelar</button><button class="primary-button" type="submit">${isEdit ? "Guardar cambios" : "Crear tarea"}</button></div></form></dialog>`;
+  return `<dialog class="app-dialog" id="task-dialog" aria-labelledby="task-dialog-title"><form data-form="task" data-project-id="${escapeHtml(projectId)}" data-task-id="${escapeHtml(task?.id ?? "")}"><div class="dialog-heading"><div><p class="eyebrow">Plan de estudio</p><h2 id="task-dialog-title">${isEdit ? "Editar tarea" : "Nueva tarea"}</h2></div><button class="icon-button" type="button" data-action="close-dialog" aria-label="Cerrar">${icon("x")}</button></div><label>Nombre de la tarea<input name="title" maxlength="100" required value="${escapeHtml(task?.title ?? "")}" placeholder="Ej. Resolver ejercicios" autofocus /></label><label>Descripción <span>opcional</span><textarea name="description" maxlength="500" rows="3" placeholder="Añade contexto o pasos importantes">${escapeHtml(task?.description ?? "")}</textarea></label><div class="task-deadline-fields"><label>Fecha límite <span>opcional</span><input name="dueDate" type="date" value="${escapeHtml(task?.dueDate ?? "")}" /></label><label>Hora límite <span>opcional</span><input name="dueTime" type="time" value="${escapeHtml(task?.dueTime ?? "")}" /></label></div><p class="field-note">La hora se guardará solamente si también eliges una fecha.</p>${isEdit ? "" : `<label>Estado<select name="status"><option value="pending" ${task?.status === "pending" || !task?.status ? "selected" : ""}>Pendiente</option><option value="in_progress" ${task?.status === "in_progress" ? "selected" : ""}>En curso</option></select></label><p class="field-note">Para marcarla como completada, guarda primero una reflexión.</p>`}${filesField}<div class="dialog-actions"><button class="secondary-button" type="button" data-action="close-dialog">Cancelar</button><button class="primary-button" type="submit">${isEdit ? "Guardar cambios" : "Crear tarea"}</button></div></form></dialog>`;
 }
 
 export function reflectionDialog(task, draft = {}, pending = {}) {

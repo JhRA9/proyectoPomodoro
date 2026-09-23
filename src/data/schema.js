@@ -63,6 +63,10 @@ function isIsoTimestamp(value) {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
 
+function isTimeKey(value) {
+  return typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
 function isSafeId(value) {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
 }
@@ -94,6 +98,8 @@ export function validateState(candidate) {
     assert(typeof task.title === "string" && task.title.trim().length > 0, "Hay una tarea sin nombre.");
     assert(TASK_STATUSES.includes(task.status), "Hay un estado de tarea inválido.");
     assert(task.dueDate === null || Boolean(parseLocalDate(task.dueDate)), "Hay una fecha límite inválida.");
+    assert(task.dueTime === undefined || task.dueTime === null || isTimeKey(task.dueTime), "Hay una hora límite inválida.");
+    assert(!task.dueTime || task.dueDate !== null, "La hora límite necesita una fecha.");
     assert(Number.isInteger(task.accumulatedSeconds) && task.accumulatedSeconds >= 0, "Hay tiempo acumulado inválido.");
   }
 
@@ -174,7 +180,11 @@ export function normalizeState(candidate) {
   state.settings.profileName = String(state.settings.profileName || "Estudiante").slice(0, 60);
   state.settings.seededDemo = Boolean(state.settings.seededDemo);
   state.projects = state.projects.map((project) => ({ ...project, description: String(project.description ?? "").slice(0, 300) }));
-  state.tasks = state.tasks.map((task) => ({ ...task, description: String(task.description ?? "").slice(0, 500), dueDate: task.dueDate || null, completedAt: task.completedAt || null }));
+  state.tasks = state.tasks.map((task) => {
+    const dueDate = task.dueDate || null;
+    const dueTime = dueDate && isTimeKey(task.dueTime) ? task.dueTime : null;
+    return { ...task, description: String(task.description ?? "").slice(0, 500), dueDate, dueTime, completedAt: task.completedAt || null };
+  });
   state.focusSessions = state.focusSessions.map((session) => ({ ...session, reason: String(session.reason || "stopped") }));
   state.learningEntries = state.learningEntries.map((entry) => {
     const session = state.focusSessions.find((item) => item.id === entry.focusSessionId);

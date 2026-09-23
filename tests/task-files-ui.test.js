@@ -19,6 +19,19 @@ function renderTaskFiles({ filesEnabled = true, taskFiles = null } = {}) {
 }
 
 describe("task attachments in the focus view", () => {
+  it("shows the selected task deadline and optional time beside the Pomodoro", () => {
+    const state = createDemoState(new Date("2026-09-21T12:00:00.000Z"));
+    const project = state.projects[0];
+    const task = state.tasks.find((item) => item.projectId === project.id);
+    task.dueDate = "2026-09-24";
+    task.dueTime = "16:20";
+    const html = focusView(state, project, task, {
+      animatePage: false, taskFilter: "all", menu: null, focusLearningTab: "draft", learningDrafts: {}, filesEnabled: false,
+    });
+
+    expect(html).toContain("Se entrega el 24 de septiembre de 2026 a las 16:20");
+  });
+
   it("does not show the cloud-only attachments panel in local mode", () => {
     const { html } = renderTaskFiles({ filesEnabled: false });
 

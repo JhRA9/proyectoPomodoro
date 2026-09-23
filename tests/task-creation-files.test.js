@@ -32,6 +32,8 @@ describe("adjuntos al crear tarea", () => {
   it("muestra un selector múltiple opcional solo para tareas nuevas con cuenta cloud", () => {
     const cloud = taskFormDialog("project-a", null, { filesEnabled: true, selectedFiles: [{ name: "Guía <final>.docx" }] });
     expect(cloud).toContain('data-input="new-task-files"');
+    expect(cloud).toContain('name="dueTime"');
+    expect(cloud).toContain('type="time"');
     expect(cloud).toContain("multiple");
     expect(cloud).toContain("Guía &lt;final&gt;.docx");
     expect(cloud).not.toMatch(/data-input="new-task-files"[^>]*required/);

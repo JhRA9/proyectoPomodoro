@@ -23,6 +23,13 @@ export function activeElapsedSeconds(timer, nowMs = Date.now()) {
   return timer.elapsedSeconds + delta;
 }
 
+function normalizeDueTime(dueDate, dueTime) {
+  const value = String(dueTime ?? "").trim();
+  if (!dueDate || !value) return null;
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new Error("La hora límite no es válida.");
+  return value;
+}
+
 export class StudyHubRepository {
   constructor({ adapter, store, clock = () => new Date() }) {
     this.adapter = adapter;
@@ -109,6 +116,7 @@ export class StudyHubRepository {
       description: cleanText(input.description, 500),
       status: TASK_STATUSES.includes(input.status) ? input.status : "pending",
       dueDate: input.dueDate || null,
+      dueTime: normalizeDueTime(input.dueDate, input.dueTime),
       accumulatedSeconds: 0,
       createdAt: this.clock().toISOString(),
       completedAt: input.status === "completed" ? this.clock().toISOString() : null,
@@ -126,6 +134,7 @@ export class StudyHubRepository {
       task.title = title;
       task.description = cleanText(input.description, 500);
       task.dueDate = input.dueDate || null;
+      task.dueTime = normalizeDueTime(input.dueDate, input.dueTime);
     });
   }
 

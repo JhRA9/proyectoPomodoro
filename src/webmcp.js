@@ -49,16 +49,16 @@ export function registerStudyHubTools(repository, router, notify) {
   register({
     name: "create_studyhub_task",
     title: "Crear tarea",
-    description: "Crea una tarea dentro de un proyecto existente. La fecha límite es opcional y usa YYYY-MM-DD.",
+    description: "Crea una tarea dentro de un proyecto existente. La fecha límite (YYYY-MM-DD) y la hora (HH:MM) son opcionales.",
     inputSchema: {
       type: "object",
-      properties: { projectId: { type: "string" }, title: { type: "string", minLength: 1, maxLength: 100 }, description: { type: "string", maxLength: 500 }, dueDate: { type: "string" } },
+      properties: { projectId: { type: "string" }, title: { type: "string", minLength: 1, maxLength: 100 }, description: { type: "string", maxLength: 500 }, dueDate: { type: "string" }, dueTime: { type: "string", pattern: "^(?:[01]\\d|2[0-3]):[0-5]\\d$" } },
       required: ["projectId", "title"],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     async execute(input) {
-      const task = await repository.createTask(input.projectId, { title: input.title, description: input.description ?? "", dueDate: input.dueDate || null, status: "pending" });
+      const task = await repository.createTask(input.projectId, { title: input.title, description: input.description ?? "", dueDate: input.dueDate || null, dueTime: input.dueTime || null, status: "pending" });
       notify("Tarea creada.");
       return { id: task.id, projectId: task.projectId, title: task.title, status: task.status };
     },
