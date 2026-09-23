@@ -22,36 +22,51 @@ describe("collapsible application sidebars", () => {
   it("persists the open state and navigates from the global task panel", async () => {
     const storage = memoryStorage();
     const state = {
-      tasks: [{ id: "task-a", projectId: "project-a", title: "Estudiar", status: "pending" }],
+      tasks: [{ id: "task-a", projectId: "project-a", title: "Estudiar", status: "completed" }],
     };
     const { app, router } = createApp(storage, state);
 
     await app.runAction("toggle-left-sidebar", { dataset: {} });
     await app.runAction("toggle-right-sidebar", { dataset: {} });
+    await app.runAction("set-project-task-tab", { dataset: { taskTab: "completed" } });
+    await app.runAction("set-completed-filter", { dataset: { projectId: "project-a", taskId: "task-a" } });
 
     const { app: restored } = createApp(storage, state);
     expect(restored.ui.leftSidebarOpen).toBe(false);
     expect(restored.ui.rightSidebarOpen).toBe(false);
+    expect(restored.ui.projectTaskTab).toBe("completed");
+    expect(restored.ui.completedTaskFilterByProject["project-a"]).toBe("task-a");
 
     await app.runAction("open-global-task", { dataset: { projectId: "project-a", taskId: "task-a" } });
     expect(router.navigate).toHaveBeenCalledWith("projects/project-a/tasks/task-a");
   });
 
-  it("groups incomplete tasks by date and leaves completed tasks out", () => {
-    const html = globalTasksPanel({
+  it("moves incomplete tasks through the dynamic due-date groups", () => {
+    const state = {
       projects: [{ id: "project-a", name: "Grado", color: "#2f8cff", icon: "folder" }],
       tasks: [
+        { id: "overdue", projectId: "project-a", title: "Entrega vencida", status: "pending", dueDate: "2026-09-22", createdAt: "2026-09-01" },
+        { id: "tomorrow", projectId: "project-a", title: "Entrega mañana", status: "in_progress", dueDate: "2026-09-24", createdAt: "2026-09-01" },
+        { id: "three", projectId: "project-a", title: "Entrega en tres días", status: "pending", dueDate: "2026-09-26", createdAt: "2026-09-01" },
+        { id: "week", projectId: "project-a", title: "Entrega próxima semana", status: "pending", dueDate: "2026-09-29", createdAt: "2026-09-01" },
         { id: "later", projectId: "project-a", title: "Entrega posterior", status: "pending", dueDate: "2026-10-10", createdAt: "2026-09-01" },
-        { id: "first", projectId: "project-a", title: "Entrega próxima", status: "in_progress", dueDate: "2026-09-24", createdAt: "2026-09-01" },
         { id: "anytime", projectId: "project-a", title: "Revisar bibliografía", status: "pending", dueDate: null, createdAt: "2026-09-01" },
         { id: "done", projectId: "project-a", title: "Ya terminada", status: "completed", dueDate: "2026-09-23", createdAt: "2026-09-01" },
       ],
-    });
+    };
+    const html = globalTasksPanel(state, new Date(2026, 8, 23, 12));
 
-    expect(html.indexOf("Entrega próxima")).toBeLessThan(html.indexOf("Entrega posterior"));
+    expect(html).toContain("Vencidas y hoy");
+    expect(html).toContain("Vence mañana");
+    expect(html).toContain("Próximos 3 días");
+    expect(html).toContain("Próxima semana");
+    expect(html).toContain("Próximas a vencer");
     expect(html).toContain("Revisar bibliografía");
     expect(html).not.toContain("Ya terminada");
-    expect(html).toContain("Próximas a vencer");
     expect(html).toContain("Sin fecha");
+
+    const nextDayHtml = globalTasksPanel(state, new Date(2026, 8, 24, 12));
+    const urgentSection = nextDayHtml.slice(nextDayHtml.indexOf('id="due-now-title"'), nextDayHtml.indexOf('id="due-tomorrow-title"'));
+    expect(urgentSection).toContain("Entrega mañana");
   });
 });

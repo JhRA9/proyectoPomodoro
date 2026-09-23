@@ -1,6 +1,6 @@
 import { PROJECT_COLORS, PROJECT_ICONS } from "../data/schema.js";
 import { projectStats } from "../state/selectors.js";
-import { dueCategory, formatDate, formatDuration, relativeDueLabel } from "../utils/time.js";
+import { differenceInCalendarDays, dueCategory, formatDate, formatDuration, relativeDueLabel } from "../utils/time.js";
 import { escapeHtml } from "../utils/text.js";
 import { MAX_LEARNING_IMAGES, normalizeLearningImages } from "../utils/learningImages.js";
 import { icon } from "./icons.js";
@@ -98,17 +98,17 @@ export function dueNotice(tasks) {
   return `<section class="due-notice" aria-labelledby="due-title"><span class="notice-icon">${icon("bell", 24)}</span><div><h2 id="due-title">Tienes ${near.length} ${near.length === 1 ? "tarea próxima" : "tareas próximas"} a vencer</h2><p>Revisa tus fechas y decide qué atender primero.</p></div><ul>${near.slice(0, 3).map((task) => `<li class="due-${dueCategory(task)}"><span></span><div><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(relativeDueLabel(task.dueDate))}</small></div></li>`).join("")}</ul></section>`;
 }
 
-function globalTaskCard(task, project) {
-  const dateClass = task.dueDate ? `due-${dueCategory(task)}` : "";
+function globalTaskCard(task, project, now) {
+  const dateClass = task.dueDate ? `due-${dueCategory(task, now)}` : "";
   const statusLabel = task.status === "in_progress" ? "En curso" : "Pendiente";
   return `<button class="global-task-card ${dateClass}" type="button" data-action="open-global-task" data-project-id="${escapeHtml(task.projectId)}" data-task-id="${escapeHtml(task.id)}" aria-label="Abrir ${escapeHtml(task.title)}">
     <span class="global-task-project" style="--project:${escapeHtml(project?.color || "#2f8cff")}">${icon(project?.icon || "folder", 16)}</span>
     <span class="global-task-copy"><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(project?.name || "Proyecto")}</small></span>
-    <span class="global-task-meta"><small>${task.dueDate ? escapeHtml(relativeDueLabel(task.dueDate)) : statusLabel}</small>${task.status === "in_progress" ? `<i title="En curso"></i>` : ""}</span>
+    <span class="global-task-meta"><small>${task.dueDate ? escapeHtml(relativeDueLabel(task.dueDate, now)) : statusLabel}</small>${task.status === "in_progress" ? `<i title="En curso"></i>` : ""}</span>
   </button>`;
 }
 
-export function globalTasksPanel(state) {
+export function globalTasksPanel(state, now = new Date()) {
   const projects = new Map(state.projects.map((project) => [project.id, project]));
   const openTasks = state.tasks.filter((task) => task.status !== "completed");
   const dated = openTasks
@@ -118,13 +118,21 @@ export function globalTasksPanel(state) {
     .filter((task) => !task.dueDate)
     .sort((a, b) => Number(b.status === "in_progress") - Number(a.status === "in_progress") || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   const renderGroup = (tasks, emptyMessage) => tasks.length
-    ? `<div class="global-task-list">${tasks.map((task) => globalTaskCard(task, projects.get(task.projectId))).join("")}</div>`
+    ? `<div class="global-task-list">${tasks.map((task) => globalTaskCard(task, projects.get(task.projectId), now)).join("")}</div>`
     : `<p class="global-tasks-empty">${emptyMessage}</p>`;
+  const datedGroups = [
+    { id: "due-now", title: "Vencidas y hoy", tasks: dated.filter((task) => differenceInCalendarDays(task.dueDate, now) <= 0), empty: "No hay tareas vencidas ni para hoy." },
+    { id: "due-tomorrow", title: "Vence mañana", tasks: dated.filter((task) => differenceInCalendarDays(task.dueDate, now) === 1), empty: "Nada vence mañana." },
+    { id: "due-three-days", title: "Próximos 3 días", tasks: dated.filter((task) => { const days = differenceInCalendarDays(task.dueDate, now); return days >= 2 && days <= 3; }), empty: "No hay entregas en los próximos 3 días." },
+    { id: "due-next-week", title: "Próxima semana", tasks: dated.filter((task) => { const days = differenceInCalendarDays(task.dueDate, now); return days >= 4 && days <= 7; }), empty: "No hay entregas para la próxima semana." },
+    { id: "due-later", title: "Próximas a vencer", tasks: dated.filter((task) => differenceInCalendarDays(task.dueDate, now) > 7), empty: "No hay otras tareas con fecha límite." },
+  ];
+  const renderSection = ({ id, title, tasks, empty }) => `<section aria-labelledby="${id}-title"><div class="global-tasks-heading"><h3 id="${id}-title">${title}</h3><span>${tasks.length}</span></div>${renderGroup(tasks, empty)}</section>`;
 
   return `<aside class="global-tasks-sidebar" id="global-tasks-sidebar" aria-label="Tareas de todos los proyectos">
     <header><div><span class="eyebrow">Agenda global</span><h2>Mis tareas</h2></div><span class="global-task-count">${openTasks.length}</span></header>
     <div class="global-tasks-scroll">
-      <section aria-labelledby="dated-tasks-title"><div class="global-tasks-heading"><h3 id="dated-tasks-title">Próximas a vencer</h3><span>${dated.length}</span></div>${renderGroup(dated, "No tienes tareas con fecha límite.")}</section>
+      ${datedGroups.map(renderSection).join("")}
       <section aria-labelledby="undated-tasks-title"><div class="global-tasks-heading"><h3 id="undated-tasks-title">Sin fecha</h3><span>${undated.length}</span></div>${renderGroup(undated, "No tienes tareas sin fecha.")}</section>
     </div>
   </aside>`;

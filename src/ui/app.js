@@ -22,7 +22,7 @@ const LAYOUT_STORAGE_PREFIX = "studyhub:layout:1";
 
 function defaultSidebarLayout() {
   const compactScreen = globalThis.matchMedia?.("(max-width: 1500px)").matches ?? false;
-  return { leftSidebarOpen: !compactScreen, rightSidebarOpen: !compactScreen };
+  return { leftSidebarOpen: !compactScreen, rightSidebarOpen: !compactScreen, projectTaskTab: "open", completedTaskFilterByProject: {} };
 }
 
 function readSidebarLayout(storage, key) {
@@ -30,9 +30,14 @@ function readSidebarLayout(storage, key) {
   if (!storage?.getItem) return defaults;
   try {
     const saved = JSON.parse(storage.getItem(key) || "null");
+    const completedTaskFilterByProject = saved?.completedTaskFilterByProject && typeof saved.completedTaskFilterByProject === "object"
+      ? Object.fromEntries(Object.entries(saved.completedTaskFilterByProject).filter(([projectId, taskId]) => typeof projectId === "string" && projectId.length <= 160 && typeof taskId === "string" && taskId.length <= 160))
+      : {};
     return {
       leftSidebarOpen: typeof saved?.leftSidebarOpen === "boolean" ? saved.leftSidebarOpen : defaults.leftSidebarOpen,
       rightSidebarOpen: typeof saved?.rightSidebarOpen === "boolean" ? saved.rightSidebarOpen : defaults.rightSidebarOpen,
+      projectTaskTab: saved?.projectTaskTab === "completed" ? "completed" : "open",
+      completedTaskFilterByProject,
     };
   } catch {
     return defaults;
@@ -60,6 +65,8 @@ function initialUiState(learningDrafts = {}, sidebarLayout = defaultSidebarLayou
     dimTheme: false,
     leftSidebarOpen: sidebarLayout.leftSidebarOpen,
     rightSidebarOpen: sidebarLayout.rightSidebarOpen,
+    projectTaskTab: sidebarLayout.projectTaskTab,
+    completedTaskFilterByProject: sidebarLayout.completedTaskFilterByProject,
     syncStatus: { state: "local", pending: false, message: "Guardado en este dispositivo" },
     toasts: [],
   };
@@ -130,6 +137,7 @@ export class StudyHubApp {
     this.toastCounter = 0;
     this.busy = false;
     this.searchTimer = null;
+    this.agendaRefreshTimer = null;
     this.fileListRequest = 0;
     this.fileCleanupRunning = null;
     this.lastRouteKey = null;
@@ -148,12 +156,14 @@ export class StudyHubApp {
     this.onPaste = (event) => { void this.handlePaste(event); };
   }
 
-  persistSidebarLayout() {
+  persistUiPreferences() {
     if (!this.layoutStorage?.setItem) return;
     try {
       this.layoutStorage.setItem(this.layoutStorageKey, JSON.stringify({
         leftSidebarOpen: this.ui.leftSidebarOpen,
         rightSidebarOpen: this.ui.rightSidebarOpen,
+        projectTaskTab: this.ui.projectTaskTab,
+        completedTaskFilterByProject: this.ui.completedTaskFilterByProject,
       }));
     } catch {
       // La navegación sigue funcionando aunque el navegador bloquee el almacenamiento.
@@ -191,7 +201,18 @@ export class StudyHubApp {
       if (event === "SIGNED_OUT") globalThis.location?.reload?.();
     }) ?? (() => {});
     this.timer.start();
+    this.scheduleAgendaRefresh();
     this.render();
+  }
+
+  scheduleAgendaRefresh() {
+    globalThis.clearTimeout(this.agendaRefreshTimer);
+    const now = new Date();
+    const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+    this.agendaRefreshTimer = globalThis.setTimeout(() => {
+      this.render();
+      this.scheduleAgendaRefresh();
+    }, Math.max(1_000, nextDay.getTime() - now.getTime()));
   }
 
   setToolsCleanup(cleanup) {
@@ -200,6 +221,7 @@ export class StudyHubApp {
 
   destroy() {
     this.timer.stop();
+    globalThis.clearTimeout(this.agendaRefreshTimer);
     this.unsubscribeStore();
     this.unsubscribeRouter();
     this.unsubscribeStatus();
@@ -473,6 +495,29 @@ export class StudyHubApp {
       }); break;
       case "toggle-filter": this.ui.menu = this.ui.menu?.type === "filter" ? null : { type: "filter" }; this.render(); break;
       case "set-filter": this.ui.taskFilter = target.dataset.filter; this.ui.menu = null; this.render(); break;
+      case "set-project-task-tab": {
+        this.ui.projectTaskTab = target.dataset.taskTab === "completed" ? "completed" : "open";
+        this.ui.menu = null;
+        this.persistUiPreferences();
+        this.render();
+        break;
+      }
+      case "toggle-completed-filter": {
+        const projectId = target.dataset.projectId;
+        this.ui.menu = this.ui.menu?.type === "completed-filter" && this.ui.menu.projectId === projectId ? null : { type: "completed-filter", projectId };
+        this.render();
+        break;
+      }
+      case "set-completed-filter": {
+        const projectId = target.dataset.projectId;
+        const requestedTaskId = target.dataset.taskId || "all";
+        const validTask = requestedTaskId === "all" || state.tasks.some((task) => task.projectId === projectId && task.id === requestedTaskId && task.status === "completed");
+        this.ui.completedTaskFilterByProject = { ...this.ui.completedTaskFilterByProject, [projectId]: validTask ? requestedTaskId : "all" };
+        this.ui.menu = null;
+        this.persistUiPreferences();
+        this.render();
+        break;
+      }
       case "set-learning-tab": this.ui.focusLearningTab = target.dataset.learningTab === "history" ? "history" : "draft"; this.render(); break;
       case "remove-learning-image": {
         this.captureOpenFormDraft();
@@ -581,7 +626,7 @@ export class StudyHubApp {
           this.ui.settingsAnchor = null;
         }
         if (this.ui.leftSidebarOpen && globalThis.matchMedia?.("(max-width: 1500px)").matches) this.ui.rightSidebarOpen = false;
-        this.persistSidebarLayout();
+        this.persistUiPreferences();
         this.render();
         break;
       }
@@ -592,7 +637,7 @@ export class StudyHubApp {
           this.ui.settingsOpen = false;
           this.ui.settingsAnchor = null;
         }
-        this.persistSidebarLayout();
+        this.persistUiPreferences();
         this.render();
         break;
       }
@@ -601,7 +646,7 @@ export class StudyHubApp {
         if (!task) break;
         if (globalThis.matchMedia?.("(max-width: 1500px)").matches) {
           this.ui.rightSidebarOpen = false;
-          this.persistSidebarLayout();
+          this.persistUiPreferences();
         }
         this.router.navigate(`projects/${task.projectId}/tasks/${task.id}`);
         break;
