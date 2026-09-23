@@ -5,15 +5,6 @@
   .task-learning { grid-column: 1 / -1; min-height: auto; }
 }
 
-@media (max-width: 1150px) {
-  .main-nav button { justify-content: center; padding: 0; width: 54px; }
-  .main-nav button span { display: none; }
-  .project-sidebar .brand > span:last-child, .project-sidebar .sidebar-search input, .project-sidebar .project-nav strong, .project-sidebar .sidebar-create { display: none; }
-  .project-sidebar .sidebar-search { width: 52px; justify-content: center; padding: 0; }
-  .project-nav a { grid-template-columns: 1fr; width: 54px; padding: 5px; }
-  .project-nav a > span { width: 42px; }
-}
-
 @media (max-width: 900px) {
   .due-notice { grid-template-columns: 50px 1fr; }
   .due-notice ul { grid-column: 1 / -1; padding: 10px 0 0; border-top: 1px solid rgba(165,197,246,.18); border-left: 0; }
@@ -31,8 +22,6 @@
 }
 
 @media (max-width: 720px) {
-  .dashboard-sidebar { display: flex; }
-  .project-sidebar { display: none; }
   .topbar { position: sticky; top: 0; z-index: 80; }
   .topbar .search-field { max-width: none; }
   .project-page, .focus-page { padding: 10px 13px 28px; }

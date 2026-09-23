@@ -14,11 +14,32 @@ import { focusView } from "../views/focusView.js";
 import { projectView } from "../views/projectView.js";
 import { projectsView } from "../views/projectsView.js";
 import { registerStudyHubTools } from "../webmcp.js";
-import { brand, confirmDialog, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
+import { brand, confirmDialog, globalTasksPanel, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
 import { icon } from "./icons.js";
 import { LearningDraftStore, normalizeLearningDraft } from "./learningDrafts.js";
 
-function initialUiState(learningDrafts = {}) {
+const LAYOUT_STORAGE_PREFIX = "studyhub:layout:1";
+
+function defaultSidebarLayout() {
+  const compactScreen = globalThis.matchMedia?.("(max-width: 1500px)").matches ?? false;
+  return { leftSidebarOpen: !compactScreen, rightSidebarOpen: !compactScreen };
+}
+
+function readSidebarLayout(storage, key) {
+  const defaults = defaultSidebarLayout();
+  if (!storage?.getItem) return defaults;
+  try {
+    const saved = JSON.parse(storage.getItem(key) || "null");
+    return {
+      leftSidebarOpen: typeof saved?.leftSidebarOpen === "boolean" ? saved.leftSidebarOpen : defaults.leftSidebarOpen,
+      rightSidebarOpen: typeof saved?.rightSidebarOpen === "boolean" ? saved.rightSidebarOpen : defaults.rightSidebarOpen,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function initialUiState(learningDrafts = {}, sidebarLayout = defaultSidebarLayout()) {
   const today = new Date();
   return {
     search: "",
@@ -37,19 +58,34 @@ function initialUiState(learningDrafts = {}) {
     settingsOpen: false,
     settingsAnchor: null,
     dimTheme: false,
+    leftSidebarOpen: sidebarLayout.leftSidebarOpen,
+    rightSidebarOpen: sidebarLayout.rightSidebarOpen,
     syncStatus: { state: "local", pending: false, message: "Guardado en este dispositivo" },
     toasts: [],
   };
 }
 
+function sidebarProfile(state, ui, account) {
+  const sidebarSettingsOpen = ui.settingsOpen && ui.settingsAnchor === "sidebar";
+  return `<div class="sidebar-profile-wrap"><button class="profile" type="button" data-action="open-settings" data-settings-anchor="sidebar" aria-haspopup="menu" aria-expanded="${sidebarSettingsOpen}" aria-label="Abrir perfil y ajustes"><span>SH</span><strong>${escapeHtml(state.settings.profileName)}</strong><span class="profile-gear">${icon("settings", 19)}</span></button>${sidebarSettingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div>`;
+}
+
 function shellSidebar(state, route, ui, account) {
   if (route.name === "projects") {
-    const sidebarSettingsOpen = ui.settingsOpen && ui.settingsAnchor === "sidebar";
-    return `<aside class="sidebar dashboard-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="active" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" data-settings-anchor="topbar" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote><div class="profile"><span>SH</span><strong>${escapeHtml(state.settings.profileName)}</strong><button class="icon-button" type="button" data-action="open-settings" data-settings-anchor="sidebar" aria-haspopup="menu" aria-expanded="${sidebarSettingsOpen}" aria-label="Abrir ajustes">${icon("settings", 19)}</button>${sidebarSettingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div></aside>`;
+    return `<aside class="sidebar dashboard-sidebar" id="left-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="active" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" data-settings-anchor="topbar" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote>${sidebarProfile(state, ui, account)}</aside>`;
   }
   const projectQuery = normalizeForSearch(ui.projectSearch);
   const filtered = state.projects.filter((project) => normalizeForSearch(`${project.name} ${project.description}`).includes(projectQuery));
-  return `<aside class="sidebar project-sidebar">${brand()}<label class="sidebar-search">${icon("search", 19)}<span class="sr-only">Buscar proyectos</span><input type="search" data-input="project-search" value="${escapeHtml(ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><nav class="project-nav" aria-label="Tus proyectos">${filtered.map((project) => `<a href="#/projects/${encodeURIComponent(project.id)}" aria-label="${escapeHtml(project.name)}" class="${project.id === route.projectId ? "active" : ""}" style="--project:${escapeHtml(project.color)}"><span>${icon(project.icon, 22)}</span><strong>${escapeHtml(project.name)}</strong></a>`).join("")}</nav><button class="sidebar-create" type="button" data-action="new-project">${icon("plus", 19)} Nuevo proyecto</button></aside>`;
+  return `<aside class="sidebar project-sidebar" id="left-sidebar">${brand()}<label class="sidebar-search">${icon("search", 19)}<span class="sr-only">Buscar proyectos</span><input type="search" data-input="project-search" value="${escapeHtml(ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><nav class="project-nav" aria-label="Tus proyectos">${filtered.map((project) => `<a href="#/projects/${encodeURIComponent(project.id)}" aria-label="${escapeHtml(project.name)}" class="${project.id === route.projectId ? "active" : ""}" style="--project:${escapeHtml(project.color)}"><span>${icon(project.icon, 22)}</span><strong>${escapeHtml(project.name)}</strong></a>`).join("")}</nav><button class="sidebar-create" type="button" data-action="new-project">${icon("plus", 19)} Nuevo proyecto</button>${sidebarProfile(state, ui, account)}</aside>`;
+}
+
+function sidebarRail(side, open) {
+  const isLeft = side === "left";
+  const action = isLeft ? "toggle-left-sidebar" : "toggle-right-sidebar";
+  const label = `${open ? "Ocultar" : "Mostrar"} panel ${isLeft ? "izquierdo" : "de tareas"}`;
+  const chevron = isLeft ? (open ? "chevronLeft" : "chevronRight") : (open ? "chevronRight" : "chevronLeft");
+  const controls = isLeft ? "left-sidebar" : "global-tasks-sidebar";
+  return `<button class="sidebar-rail sidebar-rail-${side}" type="button" data-action="${action}" aria-label="${label}" aria-expanded="${open}" aria-controls="${controls}">${icon(chevron, 18)}</button>`;
 }
 
 function settingsMenu(state, account, syncStatus) {
@@ -86,7 +122,9 @@ export class StudyHubApp {
     this.adapter = context.adapter ?? repository.adapter;
     this.migrationCandidate = context.migrationCandidate ?? null;
     this.learningDraftStore = new LearningDraftStore(context.draftStorage ?? globalThis.localStorage, this.account?.id ?? "local");
-    this.ui = initialUiState(this.learningDraftStore.load());
+    this.layoutStorage = context.layoutStorage ?? globalThis.localStorage ?? null;
+    this.layoutStorageKey = `${LAYOUT_STORAGE_PREFIX}:${encodeURIComponent(this.account?.id ?? "local")}`;
+    this.ui = initialUiState(this.learningDraftStore.load(), readSidebarLayout(this.layoutStorage, this.layoutStorageKey));
     this.ui.filesEnabled = Boolean(this.fileStore);
     if (this.adapter?.getStatus) this.ui.syncStatus = this.adapter.getStatus();
     this.toastCounter = 0;
@@ -108,6 +146,18 @@ export class StudyHubApp {
     this.onKeydown = (event) => this.handleKeydown(event);
     this.onCancel = (event) => this.handleDialogCancel(event);
     this.onPaste = (event) => { void this.handlePaste(event); };
+  }
+
+  persistSidebarLayout() {
+    if (!this.layoutStorage?.setItem) return;
+    try {
+      this.layoutStorage.setItem(this.layoutStorageKey, JSON.stringify({
+        leftSidebarOpen: this.ui.leftSidebarOpen,
+        rightSidebarOpen: this.ui.rightSidebarOpen,
+      }));
+    } catch {
+      // La navegación sigue funcionando aunque el navegador bloquee el almacenamiento.
+    }
   }
 
   mount() {
@@ -328,7 +378,9 @@ export class StudyHubApp {
     const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
     const pendingTask = state.pendingCompletion ? state.tasks.find((item) => item.id === state.pendingCompletion.taskId) : null;
     const activeTaskTitle = pendingTask ? pausedOtherTaskName(state, pendingTask.id) : null;
-    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""}">${shellSidebar(state, route, this.ui, this.account)}<main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask, { filesEnabled: this.ui.filesEnabled, selectedFiles: this.ui.dialog.files ?? [] }) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    const leftOpen = this.ui.leftSidebarOpen;
+    const rightOpen = this.ui.rightSidebarOpen;
+    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""} ${leftOpen ? "is-left-open" : "is-left-collapsed"} ${rightOpen ? "is-right-open" : "is-right-collapsed"}"><div class="sidebar-shell left-sidebar-shell ${leftOpen ? "is-open" : "is-collapsed"}">${shellSidebar(state, route, this.ui, this.account)}${sidebarRail("left", leftOpen)}</div><main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main><div class="sidebar-shell right-sidebar-shell ${rightOpen ? "is-open" : "is-collapsed"}">${sidebarRail("right", rightOpen)}${globalTasksPanel(state)}</div></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask, { filesEnabled: this.ui.filesEnabled, selectedFiles: this.ui.dialog.files ?? [] }) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
     this.openPendingDialog();
     this.timer.renderNow();
   }
@@ -520,6 +572,38 @@ export class StudyHubApp {
         this.ui.settingsAnchor = closeCurrent ? null : anchor;
         this.ui.menu = null;
         this.render();
+        break;
+      }
+      case "toggle-left-sidebar": {
+        this.ui.leftSidebarOpen = !this.ui.leftSidebarOpen;
+        if (!this.ui.leftSidebarOpen && this.ui.settingsAnchor === "sidebar") {
+          this.ui.settingsOpen = false;
+          this.ui.settingsAnchor = null;
+        }
+        if (this.ui.leftSidebarOpen && globalThis.matchMedia?.("(max-width: 1500px)").matches) this.ui.rightSidebarOpen = false;
+        this.persistSidebarLayout();
+        this.render();
+        break;
+      }
+      case "toggle-right-sidebar": {
+        this.ui.rightSidebarOpen = !this.ui.rightSidebarOpen;
+        if (this.ui.rightSidebarOpen && globalThis.matchMedia?.("(max-width: 1500px)").matches) {
+          this.ui.leftSidebarOpen = false;
+          this.ui.settingsOpen = false;
+          this.ui.settingsAnchor = null;
+        }
+        this.persistSidebarLayout();
+        this.render();
+        break;
+      }
+      case "open-global-task": {
+        const task = state.tasks.find((item) => item.id === target.dataset.taskId && item.projectId === target.dataset.projectId);
+        if (!task) break;
+        if (globalThis.matchMedia?.("(max-width: 1500px)").matches) {
+          this.ui.rightSidebarOpen = false;
+          this.persistSidebarLayout();
+        }
+        this.router.navigate(`projects/${task.projectId}/tasks/${task.id}`);
         break;
       }
       case "toggle-theme": this.ui.dimTheme = !this.ui.dimTheme; this.render(); break;

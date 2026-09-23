@@ -98,6 +98,38 @@ export function dueNotice(tasks) {
   return `<section class="due-notice" aria-labelledby="due-title"><span class="notice-icon">${icon("bell", 24)}</span><div><h2 id="due-title">Tienes ${near.length} ${near.length === 1 ? "tarea próxima" : "tareas próximas"} a vencer</h2><p>Revisa tus fechas y decide qué atender primero.</p></div><ul>${near.slice(0, 3).map((task) => `<li class="due-${dueCategory(task)}"><span></span><div><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(relativeDueLabel(task.dueDate))}</small></div></li>`).join("")}</ul></section>`;
 }
 
+function globalTaskCard(task, project) {
+  const dateClass = task.dueDate ? `due-${dueCategory(task)}` : "";
+  const statusLabel = task.status === "in_progress" ? "En curso" : "Pendiente";
+  return `<button class="global-task-card ${dateClass}" type="button" data-action="open-global-task" data-project-id="${escapeHtml(task.projectId)}" data-task-id="${escapeHtml(task.id)}" aria-label="Abrir ${escapeHtml(task.title)}">
+    <span class="global-task-project" style="--project:${escapeHtml(project?.color || "#2f8cff")}">${icon(project?.icon || "folder", 16)}</span>
+    <span class="global-task-copy"><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(project?.name || "Proyecto")}</small></span>
+    <span class="global-task-meta"><small>${task.dueDate ? escapeHtml(relativeDueLabel(task.dueDate)) : statusLabel}</small>${task.status === "in_progress" ? `<i title="En curso"></i>` : ""}</span>
+  </button>`;
+}
+
+export function globalTasksPanel(state) {
+  const projects = new Map(state.projects.map((project) => [project.id, project]));
+  const openTasks = state.tasks.filter((task) => task.status !== "completed");
+  const dated = openTasks
+    .filter((task) => task.dueDate)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  const undated = openTasks
+    .filter((task) => !task.dueDate)
+    .sort((a, b) => Number(b.status === "in_progress") - Number(a.status === "in_progress") || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  const renderGroup = (tasks, emptyMessage) => tasks.length
+    ? `<div class="global-task-list">${tasks.map((task) => globalTaskCard(task, projects.get(task.projectId))).join("")}</div>`
+    : `<p class="global-tasks-empty">${emptyMessage}</p>`;
+
+  return `<aside class="global-tasks-sidebar" id="global-tasks-sidebar" aria-label="Tareas de todos los proyectos">
+    <header><div><span class="eyebrow">Agenda global</span><h2>Mis tareas</h2></div><span class="global-task-count">${openTasks.length}</span></header>
+    <div class="global-tasks-scroll">
+      <section aria-labelledby="dated-tasks-title"><div class="global-tasks-heading"><h3 id="dated-tasks-title">Próximas a vencer</h3><span>${dated.length}</span></div>${renderGroup(dated, "No tienes tareas con fecha límite.")}</section>
+      <section aria-labelledby="undated-tasks-title"><div class="global-tasks-heading"><h3 id="undated-tasks-title">Sin fecha</h3><span>${undated.length}</span></div>${renderGroup(undated, "No tienes tareas sin fecha.")}</section>
+    </div>
+  </aside>`;
+}
+
 function learningImages(images, { editable = false, taskId = "", scope = "entry" } = {}) {
   const normalized = normalizeLearningImages(images);
   if (!normalized.length) return "";
