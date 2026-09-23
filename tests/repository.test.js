@@ -84,6 +84,18 @@ describe("StudyHubRepository timer", () => {
 });
 
 describe("StudyHubRepository data operations", () => {
+  it("deletes a project even when one of its tasks owns the active timer", async () => {
+    const test = await setup();
+    await test.repository.startTimer(test.task.id);
+
+    await test.repository.deleteProject(test.project.id);
+
+    const state = test.repository.getState();
+    expect(state.projects).toHaveLength(0);
+    expect(state.tasks).toHaveLength(0);
+    expect(state.activeTimer).toBeNull();
+  });
+
   it("cascades project deletion to tasks, sessions and learning entries", async () => {
     const test = await setup();
     await test.repository.startTimer(test.task.id);

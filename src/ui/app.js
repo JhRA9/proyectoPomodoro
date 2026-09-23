@@ -386,7 +386,7 @@ export class StudyHubApp {
   }
 
   openPendingDialog() {
-    const selector = this.migrationCandidate ? "#migration-dialog" : this.repository.getState().pendingCompletion ? "#reflection-dialog" : this.ui.confirm ? "#confirm-dialog" : this.ui.dialog?.type === "project" ? "#project-dialog" : this.ui.dialog?.type === "task" ? "#task-dialog" : null;
+    const selector = this.migrationCandidate ? "#migration-dialog" : this.ui.confirm ? "#confirm-dialog" : this.repository.getState().pendingCompletion ? "#reflection-dialog" : this.ui.dialog?.type === "project" ? "#project-dialog" : this.ui.dialog?.type === "task" ? "#task-dialog" : null;
     if (!selector) return;
     requestAnimationFrame(() => {
       const dialog = this.root.querySelector(selector);
@@ -445,7 +445,7 @@ export class StudyHubApp {
       case "delete-project": {
         const project = state.projects.find((item) => item.id === target.dataset.projectId);
         const count = state.tasks.filter((task) => task.projectId === project?.id).length;
-        this.ui.confirm = { type: "delete-project", id: project?.id, title: "¿Eliminar este proyecto?", message: `Se eliminarán “${project?.name ?? "Proyecto"}”, ${count} tareas y sus registros. Esta acción no se puede deshacer.`, confirmLabel: "Eliminar proyecto" };
+        this.ui.confirm = { type: "delete-project", id: project?.id, title: "¿Eliminar este proyecto?", message: `Se eliminarán “${project?.name ?? "Proyecto"}”, ${count} tareas, sus sesiones, reflexiones y archivos adjuntos. Esta acción no se puede deshacer.`, confirmLabel: "Eliminar proyecto" };
         this.ui.menu = null; this.render(); break;
       }
       case "toggle-project-menu": this.ui.menu = this.ui.menu?.type === "project" && this.ui.menu.projectId === target.dataset.projectId ? null : { type: "project", projectId: target.dataset.projectId }; this.render(); break;
@@ -631,10 +631,10 @@ export class StudyHubApp {
       this.ui.confirm = null;
       if (current.type === "delete-project") {
         const taskIds = this.repository.getState().tasks.filter((task) => task.projectId === current.id).map((task) => task.id);
-        if (taskIds.includes(this.repository.getState().activeTimer?.taskId)) throw new Error("Detén el cronómetro antes de eliminar este proyecto.");
         await this.repository.deleteProject(current.id);
         this.queueTaskFileCleanup(taskIds);
         taskIds.forEach((taskId) => this.clearLearningDraft(taskId));
+        if (taskIds.includes(this.ui.taskFiles?.taskId)) this.ui.taskFiles = null;
         if (this.router.current().projectId === current.id) this.router.navigate("projects");
         this.addToast("Proyecto eliminado.");
       } else if (current.type === "delete-task") {

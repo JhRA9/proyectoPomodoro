@@ -88,7 +88,7 @@ export class StudyHubRepository {
   async deleteProject(projectId) {
     return this.commit((state) => {
       const taskIds = new Set(state.tasks.filter((task) => task.projectId === projectId).map((task) => task.id));
-      if (state.activeTimer && taskIds.has(state.activeTimer.taskId)) throw new Error("Detén el cronómetro antes de eliminar este proyecto.");
+      if (state.activeTimer && taskIds.has(state.activeTimer.taskId)) state.activeTimer = null;
       state.projects = state.projects.filter((project) => project.id !== projectId);
       state.tasks = state.tasks.filter((task) => !taskIds.has(task.id));
       state.focusSessions = state.focusSessions.filter((session) => !taskIds.has(session.taskId));
