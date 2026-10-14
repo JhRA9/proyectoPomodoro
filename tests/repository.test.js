@@ -3,6 +3,7 @@ import { MemoryAdapter } from "../src/data/localAdapter.js";
 import { StudyHubRepository, activeElapsedSeconds } from "../src/data/repository.js";
 import { createEmptyState } from "../src/data/schema.js";
 import { createStore } from "../src/state/store.js";
+import { globalTasksPanel } from "../src/ui/components.js";
 
 async function setup() {
   let nowMs = new Date("2026-09-15T12:00:00.000Z").getTime();
@@ -84,6 +85,43 @@ describe("StudyHubRepository timer", () => {
 });
 
 describe("StudyHubRepository data operations", () => {
+  it("completes an overdue task atomically and removes it from the global agenda", async () => {
+    const test = await setup();
+    await test.repository.updateTask(test.task.id, {
+      title: test.task.title,
+      description: "",
+      dueDate: "2026-09-14",
+      dueTime: null,
+    });
+    await test.repository.startTimer(test.task.id);
+    test.advance(90);
+
+    await test.repository.completeTaskWithReflection(test.task.id, {
+      learned: "Repasé los conceptos del parcial.",
+      unresolved: "",
+      nextSession: "",
+      learnedImages: [],
+    });
+
+    const state = test.repository.getState();
+    const completed = state.tasks.find((task) => task.id === test.task.id);
+    expect(completed.status).toBe("completed");
+    expect(completed.accumulatedSeconds).toBe(90);
+    expect(state.focusSessions).toHaveLength(1);
+    expect(state.learningEntries).toHaveLength(1);
+    expect(state.pendingCompletion).toBeNull();
+    expect(globalTasksPanel(state, test.clock())).not.toContain(test.task.title);
+  });
+
+  it("does not change a task when the required learning note is empty", async () => {
+    const test = await setup();
+    await expect(test.repository.completeTaskWithReflection(test.task.id, {
+      learned: "   ", unresolved: "", nextSession: "", learnedImages: [],
+    })).rejects.toThrow(/qué aprendiste/i);
+    expect(test.repository.getState().tasks.find((task) => task.id === test.task.id).status).toBe("pending");
+    expect(test.repository.getState().learningEntries).toHaveLength(0);
+  });
+
   it("stores an optional due time and clears it when the date is removed", async () => {
     const test = await setup();
     await test.repository.updateTask(test.task.id, { title: test.task.title, description: "", dueDate: "2026-09-30", dueTime: "18:45" });

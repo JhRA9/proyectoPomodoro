@@ -545,13 +545,27 @@ export class StudyHubApp {
         const saved = await this.repository.stopTimer();
         this.addToast(saved ? `Sesión guardada: ${formatDuration(saved, true)}. Añade u omite la reflexión.` : "La sesión se detuvo sin tiempo pendiente.");
       }); break;
-      case "complete-task": await this.safely(async () => {
+      case "complete-task": {
         this.captureOpenFormDraft();
-        const result = await this.repository.requestCompletion(target.dataset.taskId);
-        this.addToast(result?.pausedTaskTitle
-          ? `Sesión de “${result.pausedTaskTitle}” pausada. Guarda la reflexión para completar la tarea.`
-          : "Guarda la reflexión para completar la tarea.");
-      }); break;
+        const taskId = target.dataset.taskId;
+        const draft = this.getLearningDraft(taskId);
+        if (!draft.learned.trim()) {
+          this.ui.focusLearningTab = "draft";
+          this.render();
+          this.focusLearningTextarea(taskId);
+          this.addToast("Escribe qué aprendiste para poder completar la tarea.", "error");
+          break;
+        }
+        await this.safely(async () => {
+          const result = await this.repository.completeTaskWithReflection(taskId, draft);
+          this.clearLearningDraft(taskId);
+          this.render({ skipDraftCapture: true });
+          this.addToast(result?.pausedTaskTitle
+            ? `Tarea completada. La sesión de “${result.pausedTaskTitle}” sigue pausada.`
+            : "Tarea completada y reflexión guardada.");
+        });
+        break;
+      }
       case "retry-task-files": {
         if (!this.fileStore || route.taskId !== target.dataset.taskId) break;
         this.ui.taskFiles = { taskId: route.taskId, status: "loading", items: [] };

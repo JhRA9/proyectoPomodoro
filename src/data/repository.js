@@ -298,6 +298,58 @@ export class StudyHubRepository {
     });
   }
 
+  async completeTaskWithReflection(taskId, input) {
+    const learned = cleanMultilineText(input.learned, 1200);
+    const unresolved = cleanMultilineText(input.unresolved, 1200);
+    const nextSession = cleanMultilineText(input.nextSession, 1200);
+    const learnedImages = normalizeLearningImages(input.learnedImages);
+    if (!learned) throw new Error("Escribe qué aprendiste antes de completar la tarea.");
+    const now = this.clock();
+    return this.commit((state) => {
+      const task = state.tasks.find((item) => item.id === taskId);
+      if (!task) throw new Error("La tarea ya no existe.");
+      if (task.status === "completed") return { alreadyCompleted: true, pausedTaskTitle: null };
+      if (state.pendingCompletion) throw new Error("Guarda u omite la reflexión pendiente antes de completar la tarea.");
+
+      let focusSessionId = null;
+      let pausedTaskTitle = null;
+      if (state.activeTimer?.taskId === taskId) {
+        focusSessionId = this.finalizeTimerInState(state, now, "completed")?.id ?? null;
+      } else {
+        if (state.activeTimer?.phase === "running") {
+          state.activeTimer.elapsedSeconds = activeElapsedSeconds(state.activeTimer, now.getTime());
+          state.activeTimer.phase = "paused";
+          state.activeTimer.lastResumedAt = null;
+          pausedTaskTitle = state.tasks.find((item) => item.id === state.activeTimer.taskId)?.title ?? null;
+        }
+        const reflectedSessionIds = new Set(state.learningEntries.map((entry) => entry.focusSessionId).filter(Boolean));
+        const latestUnreflected = state.focusSessions
+          .filter((session) => session.taskId === taskId && !reflectedSessionIds.has(session.id))
+          .sort((a, b) => b.endedAt.localeCompare(a.endedAt))[0];
+        focusSessionId = latestUnreflected?.id ?? null;
+      }
+
+      if (focusSessionId && state.learningEntries.some((entry) => entry.focusSessionId === focusSessionId)) {
+        throw new Error("Esta sesión ya tiene una reflexión guardada.");
+      }
+      state.learningEntries.push({
+        id: createId("learning"),
+        projectId: task.projectId,
+        taskId: task.id,
+        focusSessionId,
+        date: toLocalDateKey(now),
+        createdAt: now.toISOString(),
+        learned,
+        unresolved,
+        nextSession,
+        learnedImages,
+      });
+      task.status = "completed";
+      task.completedAt = now.toISOString();
+      return { pausedTaskTitle };
+    });
+  }
+
   async cancelCompletion() {
     if (!this.getState().pendingCompletion) return;
     return this.commit((state) => { state.pendingCompletion = null; });
