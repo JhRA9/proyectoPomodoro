@@ -478,7 +478,7 @@ export class StudyHubApp {
       }
       case "delete-task": {
         const task = state.tasks.find((item) => item.id === target.dataset.taskId);
-        this.ui.confirm = { type: "delete-task", id: task?.id, title: "¿Eliminar esta tarea?", message: `Se eliminarán “${task?.title ?? "Tarea"}”, su tiempo y sus reflexiones.`, confirmLabel: "Eliminar tarea" };
+        this.ui.confirm = { type: "delete-task", id: task?.id, title: "¿Eliminar esta tarea?", message: `Se eliminarán “${task?.title ?? "Tarea"}”, su tiempo, sus reflexiones y sus archivos adjuntos.`, confirmLabel: "Eliminar tarea" };
         this.ui.menu = null; this.render(); break;
       }
       case "toggle-task-menu": this.ui.menu = this.ui.menu?.type === "task" && this.ui.menu.taskId === target.dataset.taskId ? null : { type: "task", taskId: target.dataset.taskId }; this.render(); break;
@@ -686,8 +686,9 @@ export class StudyHubApp {
   async confirmAction() {
     const current = this.ui.confirm;
     if (!current) return;
+    this.ui.confirm = null;
+    this.root.querySelector?.("#confirm-dialog")?.close?.();
     await this.safely(async () => {
-      this.ui.confirm = null;
       if (current.type === "delete-project") {
         const taskIds = this.repository.getState().tasks.filter((task) => task.projectId === current.id).map((task) => task.id);
         await this.repository.deleteProject(current.id);
@@ -698,11 +699,10 @@ export class StudyHubApp {
         this.addToast("Proyecto eliminado.");
       } else if (current.type === "delete-task") {
         const task = this.repository.getState().tasks.find((item) => item.id === current.id);
-        if (this.repository.getState().activeTimer?.taskId === current.id) throw new Error("Detén el cronómetro antes de eliminar esta tarea.");
         await this.repository.deleteTask(current.id);
         this.queueTaskFileCleanup([current.id]);
         this.clearLearningDraft(current.id);
-        if (this.router.current().taskId === current.id) this.router.navigate(`projects/${task.projectId}`);
+        if (this.router.current().taskId === current.id) this.router.navigate(`projects/${task?.projectId ?? this.router.current().projectId}`);
         this.addToast("Tarea eliminada.");
       } else if (current.type === "reset") {
         const taskIds = this.repository.getState().tasks.map((task) => task.id);

@@ -146,6 +146,24 @@ describe("StudyHubRepository data operations", () => {
     expect(state.activeTimer).toBeNull();
   });
 
+  it("deletes a task and all its dependent data even when it owns the active timer", async () => {
+    const test = await setup();
+    await test.repository.startTimer(test.task.id);
+    test.advance(60);
+    await test.repository.stopTimer();
+    await test.repository.saveReflection({ learned: "Aprendí", unresolved: "", nextSession: "" });
+    await test.repository.startTimer(test.task.id);
+
+    await test.repository.deleteTask(test.task.id);
+
+    const state = test.repository.getState();
+    expect(state.tasks).toHaveLength(0);
+    expect(state.activeTimer).toBeNull();
+    expect(state.focusSessions).toHaveLength(0);
+    expect(state.learningEntries).toHaveLength(0);
+    expect(state.pendingCompletion).toBeNull();
+  });
+
   it("cascades project deletion to tasks, sessions and learning entries", async () => {
     const test = await setup();
     await test.repository.startTimer(test.task.id);

@@ -140,7 +140,7 @@ export class StudyHubRepository {
 
   async deleteTask(taskId) {
     return this.commit((state) => {
-      if (state.activeTimer?.taskId === taskId) throw new Error("Detén el cronómetro antes de eliminar esta tarea.");
+      if (state.activeTimer?.taskId === taskId) state.activeTimer = null;
       state.tasks = state.tasks.filter((task) => task.id !== taskId);
       state.focusSessions = state.focusSessions.filter((session) => session.taskId !== taskId);
       state.learningEntries = state.learningEntries.filter((entry) => entry.taskId !== taskId);

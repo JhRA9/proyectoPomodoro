@@ -47,6 +47,19 @@ describe("limpieza de adjuntos", () => {
     expect(fileStore.flushCleanup).not.toHaveBeenCalled();
   });
 
+  it("elimina una tarea aunque sea la dueña del temporizador activo", async () => {
+    const { app, repository, fileStore, router } = setup();
+    repository.getState().activeTimer = { taskId: "task-a", phase: "paused" };
+    app.ui.confirm = { type: "delete-task", id: "task-a" };
+
+    await app.confirmAction();
+
+    expect(repository.deleteTask).toHaveBeenCalledWith("task-a");
+    expect(fileStore.queueCleanup).toHaveBeenCalledWith(["task-a"]);
+    expect(router.navigate).toHaveBeenCalledWith("projects/project-a");
+    expect(app.ui.confirm).toBeNull();
+  });
+
   it("no borra archivos si falla la eliminación del estado", async () => {
     const { app, repository, fileStore } = setup();
     repository.deleteTask.mockRejectedValueOnce(new Error("No se pudo guardar"));
