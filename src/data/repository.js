@@ -6,6 +6,7 @@ import { parseLocalDate, toLocalDateKey } from "../utils/time.js";
 import {
   PROJECT_COLORS,
   PROJECT_ICONS,
+  PROJECT_STATUSES,
   TASK_STATUSES,
   TIMER_MODES,
   assertBackupEnvelope,
@@ -107,6 +108,8 @@ export class StudyHubRepository {
       icon: PROJECT_ICONS.includes(input.icon) ? input.icon : "folder",
       color: PROJECT_COLORS.includes(input.color) ? input.color : PROJECT_COLORS[1],
       createdAt: now.toISOString(),
+      status: "active",
+      completedAt: null,
     };
     if (!project.name) throw new Error("Escribe un nombre para el proyecto.");
     await this.commit((state) => { state.projects.unshift(project); state.settings.seededDemo = false; });
@@ -140,9 +143,35 @@ export class StudyHubRepository {
     });
   }
 
+  async setProjectStatus(projectId, status) {
+    if (!PROJECT_STATUSES.includes(status)) throw new Error("Estado de proyecto no válido.");
+    const now = this.clock();
+    return this.commit((state) => {
+      const project = state.projects.find((item) => item.id === projectId);
+      if (!project) throw new Error("El proyecto ya no existe.");
+      if (project.status === status) return { changed: false, pausedTaskTitle: null };
+
+      let pausedTaskTitle = null;
+      if (status === "completed" && state.activeTimer) {
+        const activeTask = state.tasks.find((task) => task.id === state.activeTimer.taskId);
+        if (activeTask?.projectId === projectId) {
+          state.activeTimer.elapsedSeconds = activeElapsedSeconds(state.activeTimer, now.getTime());
+          state.activeTimer.phase = "paused";
+          state.activeTimer.lastResumedAt = null;
+          pausedTaskTitle = activeTask.title;
+        }
+      }
+
+      project.status = status;
+      project.completedAt = status === "completed" ? now.toISOString() : null;
+      return { changed: true, pausedTaskTitle };
+    });
+  }
+
   async createTask(projectId, input) {
     const project = this.getState().projects.find((item) => item.id === projectId);
     if (!project) throw new Error("El proyecto ya no existe.");
+    if (project.status === "completed") throw new Error("Descompleta el proyecto antes de crear otra tarea.");
     const title = cleanText(input.title, 100);
     if (!title) throw new Error("Escribe un nombre para la tarea.");
     const recurrence = normalizeRecurrenceInput(input);
@@ -197,6 +226,8 @@ export class StudyHubRepository {
     return this.commit((state) => {
       const task = state.tasks.find((item) => item.id === taskId);
       if (!task) throw new Error("La tarea ya no existe.");
+      const project = state.projects.find((item) => item.id === task.projectId);
+      if (project?.status === "completed") throw new Error("Descompleta el proyecto antes de cambiar sus tareas.");
       task.status = status;
       task.completedAt = null;
     });
@@ -234,6 +265,8 @@ export class StudyHubRepository {
     return this.commit((state) => {
       const task = state.tasks.find((item) => item.id === taskId);
       if (!task) throw new Error("La tarea ya no existe.");
+      const project = state.projects.find((item) => item.id === task.projectId);
+      if (project?.status === "completed") throw new Error("Descompleta el proyecto antes de iniciar otra sesión.");
       if (task.status === "completed") throw new Error("Reabre la tarea antes de iniciar otra sesión.");
       assertRecurringOccurrenceAvailable(task, toLocalDateKey(now));
       if (state.pendingCompletion) throw new Error("Guarda u omite la reflexión pendiente antes de iniciar otra sesión.");
@@ -318,6 +351,8 @@ export class StudyHubRepository {
     return this.commit((state) => {
       const task = state.tasks.find((item) => item.id === taskId);
       if (!task) throw new Error("La tarea ya no existe.");
+      const project = state.projects.find((item) => item.id === task.projectId);
+      if (project?.status === "completed") throw new Error("Descompleta el proyecto antes de completar sus tareas.");
       if (task.status === "completed") return;
       const occurrenceDate = toLocalDateKey(now);
       assertRecurringOccurrenceAvailable(task, occurrenceDate);
@@ -354,6 +389,8 @@ export class StudyHubRepository {
     return this.commit((state) => {
       const task = state.tasks.find((item) => item.id === taskId);
       if (!task) throw new Error("La tarea ya no existe.");
+      const project = state.projects.find((item) => item.id === task.projectId);
+      if (project?.status === "completed") throw new Error("Descompleta el proyecto antes de completar sus tareas.");
       if (task.status === "completed") return { alreadyCompleted: true, pausedTaskTitle: null };
       if (state.pendingCompletion) throw new Error("Guarda u omite la reflexión pendiente antes de completar la tarea.");
       const occurrenceDate = toLocalDateKey(now);

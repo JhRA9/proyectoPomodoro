@@ -82,13 +82,24 @@ export function taskActionMenu(task) {
   </div>`;
 }
 
+export function projectActionMenu(project) {
+  const completed = project.status === "completed";
+  return `<div class="floating-menu project-menu" role="menu">
+    <button type="button" role="menuitem" data-action="edit-project" data-project-id="${escapeHtml(project.id)}">${icon("edit", 17)} Editar proyecto</button>
+    <button type="button" role="menuitem" data-action="${completed ? "reopen-project" : "complete-project"}" data-project-id="${escapeHtml(project.id)}">${icon(completed ? "activity" : "check", 17)} ${completed ? "Descompletar proyecto" : "Completar proyecto"}</button>
+    <button type="button" role="menuitem" class="danger-text" data-action="delete-project" data-project-id="${escapeHtml(project.id)}">${icon("trash", 17)} Eliminar proyecto</button>
+  </div>`;
+}
+
 export function projectCard(project, state, menu) {
   const stats = projectStats(state, project.id);
   const menuOpen = menu?.type === "project" && menu.projectId === project.id;
-  return `<article class="project-card" tabindex="0" data-project-id="${escapeHtml(project.id)}" style="--project:${escapeHtml(project.color)}" aria-label="Abrir ${escapeHtml(project.name)}">
+  const completed = project.status === "completed";
+  return `<article class="project-card ${completed ? "is-project-completed" : ""}" tabindex="0" data-project-id="${escapeHtml(project.id)}" style="--project:${escapeHtml(project.color)}" aria-label="Abrir ${escapeHtml(project.name)}">
     <button class="icon-button card-menu" type="button" data-action="toggle-project-menu" data-project-id="${escapeHtml(project.id)}" aria-label="Opciones de ${escapeHtml(project.name)}">${icon("more", 22)}</button>
-    ${menuOpen ? `<div class="floating-menu project-menu" role="menu"><button type="button" role="menuitem" data-action="edit-project" data-project-id="${escapeHtml(project.id)}">${icon("edit", 17)} Editar proyecto</button><button type="button" role="menuitem" class="danger-text" data-action="delete-project" data-project-id="${escapeHtml(project.id)}">${icon("trash", 17)} Eliminar proyecto</button></div>` : ""}
+    ${menuOpen ? projectActionMenu(project) : ""}
     <div class="project-card__top">${projectIcon(project, 38)}<div class="project-card__copy"><h3>${escapeHtml(project.name)}</h3><p>${escapeHtml(project.description || "Sin descripción")}</p></div></div>
+    ${completed ? `<p class="project-completed-badge">${icon("check", 14)} Proyecto completado</p>` : ""}
     <div class="project-counts"><span><i class="status-ring"></i>${stats.pending} ${stats.pending === 1 ? "tarea pendiente" : "tareas pendientes"}</span><span><i class="status-check">${icon("check", 12)}</i>${stats.completed} ${stats.completed === 1 ? "tarea completada" : "tareas completadas"}</span></div>
     <div class="progress-row" aria-label="${stats.progress}% completado"><span class="progress-track"><span style="width:${stats.progress}%"></span></span><strong>${stats.progress}%</strong></div>
   </article>`;
@@ -121,7 +132,7 @@ function globalTaskCard(task, project, now) {
 export function globalTasksPanel(state, now = new Date()) {
   const projects = new Map(state.projects.map((project) => [project.id, project]));
   const todayKey = toLocalDateKey(now);
-  const openTasks = state.tasks.filter((task) => task.status !== "completed" && (!isDailyRecurringTask(task) || (isRecurringTaskActiveOn(task, todayKey) && !isRecurringOccurrenceCompleted(task, todayKey))));
+  const openTasks = state.tasks.filter((task) => projects.get(task.projectId)?.status !== "completed" && task.status !== "completed" && (!isDailyRecurringTask(task) || (isRecurringTaskActiveOn(task, todayKey) && !isRecurringOccurrenceCompleted(task, todayKey))));
   const agendaTasks = openTasks.map((task) => isDailyRecurringTask(task) ? { ...task, dueDate: todayKey, agendaRecurrence: true } : task);
   const dated = agendaTasks
     .filter((task) => task.dueDate)

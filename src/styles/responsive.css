@@ -30,6 +30,10 @@
   .project-heading .project-icon { width: 39px; height: 39px; }
   .project-heading h1 { font-size: 1.25rem; }
   .project-heading p { overflow: hidden; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+  .project-heading-status { display: none; }
+  .completed-project-notice { align-items: flex-start; flex-wrap: wrap; }
+  .completed-project-notice p { flex-basis: calc(100% - 46px); }
+  .completed-project-notice button { width: 100%; }
   .project-overview { margin-top: 6px; }
   .due-notice { padding: 14px; }
   .tasks-panel { padding: 11px; }

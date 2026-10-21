@@ -83,7 +83,7 @@ function shellSidebar(state, route, ui, account) {
     return `<aside class="sidebar dashboard-sidebar" id="left-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="active" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" data-settings-anchor="topbar" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote>${sidebarProfile(state, ui, account)}</aside>`;
   }
   const projectQuery = normalizeForSearch(ui.projectSearch);
-  const filtered = state.projects.filter((project) => normalizeForSearch(`${project.name} ${project.description}`).includes(projectQuery));
+  const filtered = state.projects.filter((project) => (project.status !== "completed" || project.id === route.projectId) && normalizeForSearch(`${project.name} ${project.description}`).includes(projectQuery));
   return `<aside class="sidebar project-sidebar" id="left-sidebar">${brand()}<label class="sidebar-search">${icon("search", 19)}<span class="sr-only">Buscar proyectos</span><input type="search" data-input="project-search" value="${escapeHtml(ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><nav class="project-nav" aria-label="Tus proyectos">${filtered.map((project) => `<a href="#/projects/${encodeURIComponent(project.id)}" aria-label="${escapeHtml(project.name)}" class="${project.id === route.projectId ? "active" : ""}" style="--project:${escapeHtml(project.color)}"><span>${icon(project.icon, 22)}</span><strong>${escapeHtml(project.name)}</strong></a>`).join("")}</nav><button class="sidebar-create" type="button" data-action="new-project">${icon("plus", 19)} Nuevo proyecto</button>${sidebarProfile(state, ui, account)}</aside>`;
 }
 
@@ -470,6 +470,19 @@ export class StudyHubApp {
     switch (action) {
       case "new-project": this.ui.dialog = { type: "project" }; this.ui.menu = null; this.render(); break;
       case "edit-project": this.ui.dialog = { type: "project", id: target.dataset.projectId }; this.ui.menu = null; this.render(); break;
+      case "complete-project": await this.safely(async () => {
+        this.ui.menu = null;
+        const result = await this.repository.setProjectStatus(target.dataset.projectId, "completed");
+        if (this.router.current().projectId === target.dataset.projectId) this.router.navigate("projects");
+        this.addToast(result?.pausedTaskTitle
+          ? `Proyecto completado. La sesión de “${result.pausedTaskTitle}” quedó pausada sin perder tiempo.`
+          : "Proyecto completado y movido al historial.");
+      }); break;
+      case "reopen-project": await this.safely(async () => {
+        this.ui.menu = null;
+        await this.repository.setProjectStatus(target.dataset.projectId, "active");
+        this.addToast("Proyecto descompletado. Volvió a la sección principal.");
+      }); break;
       case "delete-project": {
         const project = state.projects.find((item) => item.id === target.dataset.projectId);
         const count = state.tasks.filter((task) => task.projectId === project?.id).length;

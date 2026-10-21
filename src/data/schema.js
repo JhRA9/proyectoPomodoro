@@ -3,6 +3,7 @@ import { MAX_LEARNING_IMAGES, isLearningImageDataUrl, normalizeLearningImages } 
 
 export const SCHEMA_VERSION = 1;
 export const TASK_STATUSES = ["pending", "in_progress", "completed"];
+export const PROJECT_STATUSES = ["active", "completed"];
 export const TIMER_MODES = ["countdown", "infinite"];
 export const PROJECT_ICONS = ["graduation", "code", "calculator", "book", "bulb", "activity", "folder", "brain"];
 export const PROJECT_COLORS = ["#f34fa5", "#7657ff", "#31d98b", "#ff7b45", "#2587ff", "#ff5769", "#ffc13d", "#2bd5cf"];
@@ -35,7 +36,7 @@ export function createDemoState(now = new Date()) {
     { id: "project-university", name: "Tareas de la universidad", description: "Trabajos y entregas del semestre.", icon: "graduation", color: "#f34fa5", createdAt: new Date(now.getTime() - 5 * 86_400_000).toISOString() },
     { id: "project-calculus", name: "Estudios de cálculo", description: "Límites, derivadas e integrales.", icon: "calculator", color: "#31d98b", createdAt: new Date(now.getTime() - 9 * 86_400_000).toISOString() },
     { id: "project-english", name: "Estudios de inglés", description: "Vocabulario y práctica semanal.", icon: "book", color: "#ff7b45", createdAt: new Date(now.getTime() - 14 * 86_400_000).toISOString() },
-  ];
+  ].map((project) => ({ ...project, status: "active", completedAt: null }));
   state.tasks = [
     { id: "task-workshop", projectId: "project-programming", title: "Resolver taller 2", description: "Ejercicios de funciones y arrays", status: "in_progress", dueDate: addDaysKey(1, now), accumulatedSeconds: 0, createdAt: now.toISOString(), completedAt: null },
     { id: "task-arrays", projectId: "project-programming", title: "Ver video de arrays", description: "Tomar apuntes sobre métodos principales", status: "pending", dueDate: null, accumulatedSeconds: 0, createdAt: now.toISOString(), completedAt: null },
@@ -88,6 +89,9 @@ export function validateState(candidate) {
     assert(PROJECT_ICONS.includes(project.icon), "Hay un icono de proyecto no compatible.");
     assert(/^#[0-9a-f]{6}$/i.test(project.color), "Hay un color de proyecto inválido.");
     assert(isIsoTimestamp(project.createdAt), "Hay una fecha de proyecto inválida.");
+    assert(PROJECT_STATUSES.includes(project.status), "Hay un estado de proyecto inválido.");
+    assert(project.completedAt === null || isIsoTimestamp(project.completedAt), "Hay una fecha de finalización de proyecto inválida.");
+    assert(project.status === "completed" ? project.completedAt !== null : project.completedAt === null, "El estado del proyecto no coincide con su fecha de finalización.");
   }
 
   const taskIds = new Set();
@@ -193,7 +197,17 @@ export function normalizeState(candidate) {
   state.settings.timerMode = TIMER_MODES.includes(state.settings.timerMode) ? state.settings.timerMode : "countdown";
   state.settings.profileName = String(state.settings.profileName || "Estudiante").slice(0, 60);
   state.settings.seededDemo = Boolean(state.settings.seededDemo);
-  state.projects = state.projects.map((project) => ({ ...project, description: String(project.description ?? "").slice(0, 300) }));
+  state.projects = state.projects.map((project) => {
+    const status = project.status === "completed" ? "completed" : "active";
+    return {
+      ...project,
+      description: String(project.description ?? "").slice(0, 300),
+      status,
+      completedAt: status === "completed"
+        ? (isIsoTimestamp(project.completedAt) ? project.completedAt : project.createdAt)
+        : null,
+    };
+  });
   state.tasks = state.tasks.map((task) => {
     const dueDate = task.dueDate || null;
     const dueTime = dueDate && isTimeKey(task.dueTime) ? task.dueTime : null;

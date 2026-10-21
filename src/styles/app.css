@@ -63,6 +63,16 @@
 .project-card__copy { min-width: 0; }
 .project-card h3 { margin: 0; font-size: 1rem; line-height: 1.3; }
 .project-card__copy p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 5px 0 0; color: var(--muted-2); font-size: .78rem; line-height: 1.45; }
+.project-card.is-project-completed { border-color: rgba(49,217,139,.26); background: linear-gradient(135deg, rgba(19,43,48,.82), rgba(14,26,41,.96)); }
+.project-card.is-project-completed .project-icon { filter: saturate(.72); }
+.project-completed-badge { width: fit-content; display: inline-flex; align-items: center; gap: 6px; margin: 13px 0 -5px; padding: 5px 9px; color: #7cebb7; border: 1px solid rgba(49,217,139,.28); border-radius: 999px; background: rgba(27,156,100,.1); font-size: .72rem; font-weight: 700; }
+.completed-projects-heading { margin-top: 44px; }
+.completed-project-count { min-width: 34px; height: 34px; display: grid; place-items: center; color: #75e9b4; border: 1px solid rgba(49,217,139,.25); border-radius: 999px; background: rgba(49,217,139,.08); font-size: .8rem; font-weight: 800; }
+.completed-projects-empty { min-height: 132px; }
+.empty-project-group { min-height: 206px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); text-align: center; }
+.empty-project-group span { color: var(--green); }
+.empty-project-group strong { color: var(--text); }
+.empty-project-group small { font-size: .78rem; }
 .project-counts { display: grid; gap: 6px; margin: 16px 0 14px; color: #c1cde0; font-size: .82rem; }
 .project-counts span { display: flex; align-items: center; gap: 8px; }
 .status-ring { width: 16px; height: 16px; border: 2px solid #9fb4d3; border-radius: 50%; }
