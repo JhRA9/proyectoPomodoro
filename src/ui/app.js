@@ -400,7 +400,12 @@ export class StudyHubApp {
     const storedProject = this.ui.dialog?.type === "project" ? state.projects.find((item) => item.id === this.ui.dialog.id) : null;
     const storedTask = this.ui.dialog?.type === "task" ? state.tasks.find((item) => item.id === this.ui.dialog.id) : null;
     const editingProject = this.ui.dialog?.type === "project" ? { ...(storedProject ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
-    const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
+    const taskDialogProjectId = this.ui.dialog?.projectId ?? storedTask?.projectId;
+    const availableTaskCategories = [...new Map(state.tasks
+      .filter((item) => item.projectId === taskDialogProjectId && item.category)
+      .map((item) => [normalizeForSearch(item.category), item.category])).values()]
+      .sort((a, b) => a.localeCompare(b, "es"));
+    const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}), availableCategories: availableTaskCategories } : null;
     const pendingTask = state.pendingCompletion ? state.tasks.find((item) => item.id === state.pendingCompletion.taskId) : null;
     const activeTaskTitle = pendingTask ? pausedOtherTaskName(state, pendingTask.id) : null;
     const leftOpen = this.ui.leftSidebarOpen;

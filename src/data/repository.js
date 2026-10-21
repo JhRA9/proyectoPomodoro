@@ -180,6 +180,7 @@ export class StudyHubRepository {
       projectId,
       title,
       description: cleanText(input.description, 500),
+      category: cleanText(input.category, 60),
       status: TASK_STATUSES.includes(input.status) ? input.status : "pending",
       dueDate: recurrence ? null : input.dueDate || null,
       dueTime: recurrence ? null : normalizeDueTime(input.dueDate, input.dueTime),
@@ -200,6 +201,7 @@ export class StudyHubRepository {
       if (!title) throw new Error("Escribe un nombre para la tarea.");
       task.title = title;
       task.description = cleanText(input.description, 500);
+      task.category = cleanText(input.category, 60);
       task.recurrence = normalizeRecurrenceInput(input, task.recurrence);
       task.dueDate = task.recurrence ? null : input.dueDate || null;
       task.dueTime = task.recurrence ? null : normalizeDueTime(input.dueDate, input.dueTime);

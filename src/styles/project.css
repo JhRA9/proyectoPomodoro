@@ -32,8 +32,9 @@
 .due-notice li { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .due-notice li > div { min-width: 0; overflow: hidden; }
 .due-notice li > span { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: var(--due-color); }
-.due-notice li strong, .due-notice li small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.due-notice li strong { font-size: .76rem; }
+.due-notice li strong, .due-notice li small { display: block; overflow: hidden; }
+.due-notice li strong { font-size: .76rem; line-height: 1.35; overflow-wrap: anywhere; white-space: normal; }
+.due-notice li small { text-overflow: ellipsis; white-space: nowrap; }
 .due-notice li small { margin-top: 1px; color: #a7b7cc; font-size: .7rem; }
 .due-overdue, .due-urgent { --due-color:#ff5367; }
 .due-soon { --due-color:#ffc13d; }
@@ -70,6 +71,9 @@
 .task-radio.is-complete { border-color: #31d98b; background: #31d98b; }
 .task-copy { min-width: 0; }
 .task-copy strong, .task-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-copy > strong { line-height: 1.35; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+.task-copy .task-category { display: flex; align-items: center; gap: 4px; color: #7eb6ff; }
+.task-copy .task-category svg { flex: 0 0 auto; }
 .task-row .date-chip { grid-column: 3; justify-self: end; }
 .task-row .status-wrap { grid-column: 4; }
 .task-row .task-time { grid-column: 5; justify-self: end; min-width: 0; text-align: right; }

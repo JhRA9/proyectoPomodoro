@@ -103,7 +103,7 @@
 .global-task-project { width: 34px; height: 34px; display: grid; place-items: center; color: white; border-radius: 9px; background: color-mix(in srgb,var(--project) 72%,#172a42); }
 .global-task-copy { min-width: 0; }
 .global-task-copy strong, .global-task-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.global-task-copy strong { font-size: .78rem; }
+.global-task-copy strong { font-size: .78rem; line-height: 1.35; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
 .global-task-copy small { margin-top: 4px; color: #8195b1; font-size: .68rem; }
 .global-task-meta { display: flex; align-items: center; gap: 6px; justify-self: end; color: #8ca2be; }
 .global-task-meta small { max-width: 96px; font-size: .67rem; line-height: 1.3; text-align: right; }

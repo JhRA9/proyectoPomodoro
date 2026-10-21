@@ -100,6 +100,7 @@ export function validateState(candidate) {
     taskIds.add(task.id);
     assert(projectIds.has(task.projectId), "Hay una tarea sin proyecto válido.");
     assert(typeof task.title === "string" && task.title.trim().length > 0, "Hay una tarea sin nombre.");
+    assert(task.category === undefined || (typeof task.category === "string" && task.category.length <= 60), "Hay una categoría de tarea inválida.");
     assert(TASK_STATUSES.includes(task.status), "Hay un estado de tarea inválido.");
     assert(task.dueDate === null || Boolean(parseLocalDate(task.dueDate)), "Hay una fecha límite inválida.");
     assert(task.dueTime === undefined || task.dueTime === null || isTimeKey(task.dueTime), "Hay una hora límite inválida.");
@@ -219,7 +220,7 @@ export function normalizeState(candidate) {
           completedDates: [...new Set((Array.isArray(task.recurrence.completedDates) ? task.recurrence.completedDates : []).filter((date) => parseLocalDate(date) && date >= task.recurrence.startDate && (!task.recurrence.endDate || date <= task.recurrence.endDate)))].sort(),
         }
       : null;
-    return { ...task, description: String(task.description ?? "").slice(0, 500), dueDate: recurrence ? null : dueDate, dueTime: recurrence ? null : dueTime, recurrence, completedAt: task.completedAt || null };
+    return { ...task, description: String(task.description ?? "").slice(0, 500), category: String(task.category ?? "").slice(0, 60), dueDate: recurrence ? null : dueDate, dueTime: recurrence ? null : dueTime, recurrence, completedAt: task.completedAt || null };
   });
   state.focusSessions = state.focusSessions.map((session) => ({ ...session, reason: String(session.reason || "stopped") }));
   state.learningEntries = state.learningEntries.map((entry) => {
