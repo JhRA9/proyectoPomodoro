@@ -24,12 +24,13 @@
 .completed-project-notice button { min-height: 36px; padding: 0 13px; color: #8cefc1; border: 1px solid rgba(49,217,139,.3); border-radius: 8px; background: rgba(24,125,84,.16); font-weight: 700; cursor: pointer; }
 .project-overview { display: grid; grid-template-columns: minmax(0,1.48fr) minmax(390px,1fr); gap: 14px; margin-top: 11px; }
 .tasks-column { min-width: 0; display: grid; align-content: start; gap: 12px; }
-.due-notice { min-height: 103px; display: grid; grid-template-columns: 58px minmax(220px,1fr) minmax(250px,.9fr); align-items: center; gap: 17px; padding: 15px 19px; border: 1px solid #297eff; border-radius: 12px; background: linear-gradient(110deg,rgba(19,74,172,.56),rgba(17,49,103,.28)); box-shadow: inset 0 0 35px rgba(38,100,220,.08); }
+.due-notice { min-width: 0; min-height: 103px; display: grid; grid-template-columns: 58px minmax(0,1fr) minmax(0,.9fr); align-items: center; gap: 17px; overflow: hidden; padding: 15px 19px; border: 1px solid #297eff; border-radius: 12px; background: linear-gradient(110deg,rgba(19,74,172,.56),rgba(17,49,103,.28)); box-shadow: inset 0 0 35px rgba(38,100,220,.08); }
 .notice-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: #1278ff; box-shadow: 0 10px 28px rgba(18,120,255,.35); }
 .due-notice h2 { margin: 0; font-size: 1rem; }
 .due-notice p { margin: 7px 0 0; color: #aac0e1; font-size: .82rem; }
-.due-notice ul { display: grid; gap: 7px; margin: 0; padding: 0 0 0 17px; border-left: 1px solid rgba(165,197,246,.18); list-style: none; }
+.due-notice ul { min-width: 0; display: grid; gap: 7px; margin: 0; padding: 0 0 0 17px; border-left: 1px solid rgba(165,197,246,.18); list-style: none; }
 .due-notice li { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.due-notice li > div { min-width: 0; overflow: hidden; }
 .due-notice li > span { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: var(--due-color); }
 .due-notice li strong, .due-notice li small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .due-notice li strong { font-size: .76rem; }
