@@ -6,6 +6,7 @@ export function parseRoute(hash = globalThis.location?.hash ?? "") {
   } catch {
     return { name: "projects" };
   }
+  if (parts[0] === "completed" && parts.length === 1) return { name: "completedProjects" };
   if (parts[0] !== "projects") return { name: "projects" };
   if (parts.length === 1) return { name: "projects" };
   if (parts.length === 2) return { name: "project", projectId: parts[1] };

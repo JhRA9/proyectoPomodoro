@@ -13,6 +13,10 @@ describe("search and routing hardening", () => {
     expect(parseRoute("#/projects/%E0%A4%A")).toEqual({ name: "projects" });
   });
 
+  it("routes completed projects to their own section", () => {
+    expect(parseRoute("#/completed")).toEqual({ name: "completedProjects" });
+  });
+
   it("rejects unsafe identifiers in imported backups", () => {
     const envelope = createExportEnvelope(createDemoState(new Date("2026-09-15T12:00:00.000Z")));
     envelope.data.projects[0].id = 'project" onmouseover="alert(1)';

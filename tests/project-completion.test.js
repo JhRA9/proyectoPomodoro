@@ -4,6 +4,7 @@ import { StudyHubRepository } from "../src/data/repository.js";
 import { createEmptyState, normalizeState } from "../src/data/schema.js";
 import { createStore } from "../src/state/store.js";
 import { globalTasksPanel, projectCard } from "../src/ui/components.js";
+import { completedProjectsView } from "../src/views/completedProjectsView.js";
 import { projectsView } from "../src/views/projectsView.js";
 
 async function setup() {
@@ -47,16 +48,20 @@ describe("project completion", () => {
     expect(normalizeState(legacy).projects[0]).toMatchObject({ status: "active", completedAt: null });
   });
 
-  it("renders active and completed projects in separate dashboard sections", async () => {
+  it("hides completed projects from the dashboard and renders them in their own view", async () => {
     const test = await setup();
     await test.repository.setProjectStatus(test.project.id, "completed");
     const active = await test.repository.createProject({ name: "Proyecto activo", description: "", icon: "folder", color: "#7657ff" });
     const state = test.repository.getState();
     const html = projectsView(state, { search: "", animatePage: false, menu: null });
+    const completedHtml = completedProjectsView(state, { search: "", animatePage: false, menu: null });
     expect(html).toContain("Mis proyectos");
-    expect(html).toContain("Proyectos completados");
-    expect(html.indexOf(active.name)).toBeLessThan(html.indexOf("Proyectos completados"));
-    expect(html.indexOf(test.project.name)).toBeGreaterThan(html.indexOf("Proyectos completados"));
+    expect(html).toContain(active.name);
+    expect(html).not.toContain(test.project.name);
+    expect(html).not.toContain("Proyectos completados");
+    expect(completedHtml).toContain("Proyectos completados");
+    expect(completedHtml).toContain(test.project.name);
+    expect(completedHtml).not.toContain(active.name);
     expect(projectCard(state.projects.find((project) => project.id === test.project.id), state, { type: "project", projectId: test.project.id })).toContain("Descompletar proyecto");
   });
 });

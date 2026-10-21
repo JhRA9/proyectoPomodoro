@@ -12,6 +12,7 @@ import { escapeHtml, normalizeForSearch } from "../utils/text.js";
 import { MAX_LEARNING_IMAGES, prepareLearningImage } from "../utils/learningImages.js";
 import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
 import { focusView } from "../views/focusView.js";
+import { completedProjectsView } from "../views/completedProjectsView.js";
 import { projectView } from "../views/projectView.js";
 import { projectsView } from "../views/projectsView.js";
 import { registerStudyHubTools } from "../webmcp.js";
@@ -79,8 +80,8 @@ function sidebarProfile(state, ui, account) {
 }
 
 function shellSidebar(state, route, ui, account) {
-  if (route.name === "projects") {
-    return `<aside class="sidebar dashboard-sidebar" id="left-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="active" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" data-settings-anchor="topbar" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote>${sidebarProfile(state, ui, account)}</aside>`;
+  if (["projects", "completedProjects"].includes(route.name)) {
+    return `<aside class="sidebar dashboard-sidebar" id="left-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="${route.name === "projects" ? "active" : ""}" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><a class="${route.name === "completedProjects" ? "active" : ""}" href="#/completed" aria-label="Proyectos completados">${icon("archive")}<span>Proyectos completados</span></a><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" data-settings-anchor="topbar" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote>${sidebarProfile(state, ui, account)}</aside>`;
   }
   const projectQuery = normalizeForSearch(ui.projectSearch);
   const filtered = state.projects.filter((project) => (project.status !== "completed" || project.id === route.projectId) && normalizeForSearch(`${project.name} ${project.description}`).includes(projectQuery));
@@ -104,7 +105,7 @@ function settingsMenu(state, account, syncStatus) {
 }
 
 function shellTopbar(state, route, ui, account) {
-  const dashboard = route.name === "projects";
+  const dashboard = ["projects", "completedProjects"].includes(route.name);
   const topbarSettingsOpen = ui.settingsOpen && ui.settingsAnchor !== "sidebar";
   return `<header class="topbar"><label class="search-field">${icon("search")}<span class="sr-only">${dashboard ? "Buscar proyectos" : "Buscar en tus proyectos"}</span><input type="search" data-input="${dashboard ? "search" : "project-search"}" value="${escapeHtml(dashboard ? ui.search : ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><button class="icon-button theme-button" type="button" data-action="toggle-theme" aria-label="Cambiar intensidad del tema">${icon(ui.dimTheme ? "moon" : "sun")}</button><div class="settings-wrap"><button class="avatar" type="button" data-action="open-settings" data-settings-anchor="topbar" aria-haspopup="menu" aria-expanded="${topbarSettingsOpen}" aria-label="Copias y ajustes">SH</button>${topbarSettingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div></header>`;
 }
@@ -365,7 +366,7 @@ export class StudyHubApp {
   resolveRoute() {
     const state = this.repository.getState();
     const route = this.router.current();
-    if (route.name === "projects") return { route, project: null, task: null };
+    if (["projects", "completedProjects"].includes(route.name)) return { route, project: null, task: null };
     const project = state.projects.find((item) => item.id === route.projectId);
     if (!project) {
       queueMicrotask(() => this.router.navigate("projects"));
@@ -393,6 +394,7 @@ export class StudyHubApp {
     this.ui.animatePage = this.lastRouteKey !== routeKey;
     this.lastRouteKey = routeKey;
     let content = projectsView(state, this.ui);
+    if (route.name === "completedProjects") content = completedProjectsView(state, this.ui);
     if (route.name === "project" && project) content = projectView(state, project, this.ui);
     if (route.name === "focus" && project && task) content = focusView(state, project, task, this.ui);
     const storedProject = this.ui.dialog?.type === "project" ? state.projects.find((item) => item.id === this.ui.dialog.id) : null;
@@ -481,6 +483,7 @@ export class StudyHubApp {
       case "reopen-project": await this.safely(async () => {
         this.ui.menu = null;
         await this.repository.setProjectStatus(target.dataset.projectId, "active");
+        if (this.router.current().projectId === target.dataset.projectId) this.router.navigate("projects");
         this.addToast("Proyecto descompletado. Volvió a la sección principal.");
       }); break;
       case "delete-project": {
