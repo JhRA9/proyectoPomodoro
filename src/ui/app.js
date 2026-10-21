@@ -10,6 +10,7 @@ import { TimerController } from "../timer/timerController.js";
 import { formatDuration, formatFocusTimer, toLocalDateKey } from "../utils/time.js";
 import { escapeHtml, normalizeForSearch } from "../utils/text.js";
 import { MAX_LEARNING_IMAGES, prepareLearningImage } from "../utils/learningImages.js";
+import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
 import { focusView } from "../views/focusView.js";
 import { projectView } from "../views/projectView.js";
 import { projectsView } from "../views/projectsView.js";
@@ -432,7 +433,12 @@ export class StudyHubApp {
     const panel = display.closest(".timer-panel");
     panel?.style.setProperty("--timer-progress", String(target === null ? (seconds % 60) / 60 : Math.min(1, seconds / target)));
     const status = panel?.querySelector("[data-timer-status]");
-    if (status) status.textContent = relevant?.phase === "paused" ? "En pausa" : relevant?.phase === "running" ? (mode === "infinite" ? "Tiempo transcurrido" : remaining < 0 ? "Tiempo extra" : "Enfócate") : task?.status === "completed" ? "Tarea completada" : mode === "infinite" ? "Listo · sin límite" : "Listo para comenzar";
+    if (status) {
+      const todayKey = toLocalDateKey();
+      const completedToday = isRecurringOccurrenceCompleted(task, todayKey);
+      const unavailableToday = isDailyRecurringTask(task) && !isRecurringTaskActiveOn(task, todayKey);
+      status.textContent = relevant?.phase === "paused" ? "En pausa" : relevant?.phase === "running" ? (mode === "infinite" ? "Tiempo transcurrido" : remaining < 0 ? "Tiempo extra" : "Enfócate") : completedToday ? "Tarea de hoy completada" : task?.status === "completed" ? "Tarea completada" : unavailableToday ? "Fuera del periodo diario" : mode === "infinite" ? "Listo · sin límite" : "Listo para comenzar";
+    }
   }
 
   async handleClick(event) {
@@ -491,7 +497,7 @@ export class StudyHubApp {
         const result = await this.repository.setTaskStatus(target.dataset.taskId, target.dataset.status);
         this.addToast(result?.pausedTaskTitle
           ? `Sesión de “${result.pausedTaskTitle}” pausada. Guarda la reflexión para completar la tarea.`
-          : target.dataset.status === "completed" ? "Guarda la reflexión para completar la tarea." : "Estado actualizado.");
+          : target.dataset.status === "completed" ? result?.occurrenceCompletion ? "Guarda la reflexión para completar la actividad de hoy." : "Guarda la reflexión para completar la tarea." : "Estado actualizado.");
       }); break;
       case "toggle-filter": this.ui.menu = this.ui.menu?.type === "filter" ? null : { type: "filter" }; this.render(); break;
       case "set-filter": this.ui.taskFilter = target.dataset.filter; this.ui.menu = null; this.render(); break;
@@ -561,8 +567,8 @@ export class StudyHubApp {
           this.clearLearningDraft(taskId);
           this.render({ skipDraftCapture: true });
           this.addToast(result?.pausedTaskTitle
-            ? `Tarea completada. La sesión de “${result.pausedTaskTitle}” sigue pausada.`
-            : "Tarea completada y reflexión guardada.");
+            ? `${result?.occurrenceCompleted ? "Actividad de hoy completada" : "Tarea completada"}. La sesión de “${result.pausedTaskTitle}” sigue pausada.`
+            : result?.occurrenceCompleted ? "Actividad de hoy completada y reflexión guardada." : "Tarea completada y reflexión guardada.");
         });
         break;
       }
@@ -893,6 +899,7 @@ export class StudyHubApp {
     event.preventDefault();
     const form = event.target;
     const data = Object.fromEntries(new FormData(form).entries());
+    if (form.dataset.form === "task") data.repeatDaily = form.elements?.repeatDaily?.checked ? "daily" : data.repeatDaily === "daily" ? "daily" : "";
     if (form.dataset.form === "timer-config") {
       const success = await this.safely(async () => { await this.repository.setFocusDurationParts(data.hours, data.minutes); });
       if (success) this.addToast("Duración personalizada guardada.");
@@ -944,6 +951,8 @@ export class StudyHubApp {
     }
     if (form.dataset.form === "reflection") {
       const pending = this.repository.getState().pendingCompletion;
+      const pendingTask = this.repository.getState().tasks.find((task) => task.id === pending?.taskId);
+      const recurringCompletion = (pending?.kind ?? "completion") === "completion" && isDailyRecurringTask(pendingTask);
       const pausedTask = pausedOtherTaskName(this.repository.getState(), pending?.taskId);
       const captured = this.captureLearningDraftForm(form);
       const reflectionKind = pending?.kind ?? "completion";
@@ -953,8 +962,8 @@ export class StudyHubApp {
         this.clearLearningDraft(pending?.taskId);
         this.render({ skipDraftCapture: true });
         this.addToast(pausedTask
-          ? `Tarea completada. La sesión de “${pausedTask}” sigue pausada y puedes reanudarla.`
-          : reflectionKind === "session" ? "Reflexión de la sesión guardada." : "Tarea completada y reflexión guardada.");
+          ? `${recurringCompletion ? "Actividad de hoy completada" : "Tarea completada"}. La sesión de “${pausedTask}” sigue pausada y puedes reanudarla.`
+          : reflectionKind === "session" ? "Reflexión de la sesión guardada." : recurringCompletion ? "Actividad de hoy completada y reflexión guardada." : "Tarea completada y reflexión guardada.");
       }
     }
   }

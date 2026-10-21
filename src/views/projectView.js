@@ -1,4 +1,5 @@
 import { calendarCells, dueCategory, monthLabel, toLocalDateKey } from "../utils/time.js";
+import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
 import { escapeHtml } from "../utils/text.js";
 import { dueNotice, learningTable, projectIcon, taskRow } from "../ui/components.js";
 import { icon } from "../ui/icons.js";
@@ -22,9 +23,16 @@ function calendar(projectTaskList, ui) {
     list.push(task);
     tasksByDate.set(task.dueDate, list);
   });
+  cells.forEach((cell) => {
+    const recurring = projectTaskList.filter((task) => isRecurringTaskActiveOn(task, cell.key));
+    if (!recurring.length) return;
+    tasksByDate.set(cell.key, [...(tasksByDate.get(cell.key) ?? []), ...recurring]);
+  });
   return `<section class="calendar-panel" aria-labelledby="calendar-title"><header><button class="icon-button outlined" type="button" data-action="calendar-prev" aria-label="Mes anterior">${icon("chevronLeft")}</button><h2 id="calendar-title">${monthLabel(year, month)}</h2><div><button class="icon-button outlined" type="button" data-action="calendar-next" aria-label="Mes siguiente">${icon("chevronRight")}</button><button class="today-button" type="button" data-action="calendar-today">Hoy</button></div></header><div class="calendar-weekdays">${WEEKDAYS.map((day) => `<span>${day}</span>`).join("")}</div><div class="calendar-grid">${cells.map((cell) => {
     const tasks = tasksByDate.get(cell.key) ?? [];
-    const categories = [...new Set(tasks.map((task) => dueCategory(task)))];
+    const categories = [...new Set(tasks.map((task) => isDailyRecurringTask(task)
+      ? isRecurringOccurrenceCompleted(task, cell.key) ? "completed" : dueCategory({ ...task, dueDate: cell.key, status: "pending" })
+      : dueCategory(task)))];
     const primary = categories.includes("completed") && categories.length === 1 ? "completed" : categories.includes("overdue") || categories.includes("urgent") ? "urgent" : categories.includes("soon") ? "soon" : categories.includes("future") ? "future" : "";
     return `<button type="button" data-action="calendar-day" data-date="${cell.key}" class="calendar-day ${!cell.inMonth ? "outside" : ""} ${cell.isToday ? "today" : ""} ${ui.selectedDate === cell.key ? "selected" : ""} ${primary ? `has-${primary}` : ""}" aria-label="${cell.key}${tasks.length ? `, ${tasks.length} tareas` : ""}" ${tasks.length ? "" : "tabindex=\"-1\""}><span>${cell.day}</span>${categories.length ? `<i class="date-markers">${categories.slice(0, 3).map((category) => `<b class="due-${category}"></b>`).join("")}</i>` : ""}</button>`;
   }).join("")}</div><footer><strong>Fechas de entrega</strong><div><span><i class="legend-dot due-urgent"></i>Próxima</span><span><i class="legend-dot due-soon"></i>En unos días</span><span><i class="legend-dot due-future"></i>Más adelante</span><span><i class="legend-dot due-completed"></i>Completada</span></div></footer></section>`;
@@ -39,7 +47,7 @@ export function projectView(state, project, ui) {
   const selectedCompletedTask = completedTasks.some((task) => task.id === requestedCompletedTask) ? requestedCompletedTask : "all";
   const filteredTasks = (activeTaskTab === "completed" ? completedTasks : openTasks).filter((task) => {
     if (activeTaskTab === "completed" && selectedCompletedTask !== "all" && task.id !== selectedCompletedTask) return false;
-    if (ui.selectedDate && task.dueDate !== ui.selectedDate) return false;
+    if (ui.selectedDate && task.dueDate !== ui.selectedDate && !isRecurringTaskActiveOn(task, ui.selectedDate)) return false;
     return true;
   });
   const toolbar = activeTaskTab === "completed" || ui.selectedDate

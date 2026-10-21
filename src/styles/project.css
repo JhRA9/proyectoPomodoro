@@ -70,6 +70,7 @@
 .task-copy strong { font-size: .82rem; font-weight: 520; }
 .task-copy small { margin-top: 3px; color: var(--muted-2); font-size: .7rem; }
 .date-chip { min-height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; color: var(--due-color); border: 1px solid color-mix(in srgb,var(--due-color) 42%,transparent); border-radius: 8px; background: color-mix(in srgb,var(--due-color) 9%,transparent); font-size: .72rem; white-space: nowrap; }
+.recurrence-chip { --due-color: #8d9fff; }
 .task-time { min-width: 38px; color: #8fa5c3; font-size: .68rem; text-align: right; }
 .task-more { color: #94afd4; }
 .calendar-panel { min-width: 0; padding: 13px; }

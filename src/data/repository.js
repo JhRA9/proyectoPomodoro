@@ -1,7 +1,8 @@
 import { createId } from "../utils/id.js";
 import { cleanMultilineText, cleanText } from "../utils/text.js";
 import { normalizeLearningImages } from "../utils/learningImages.js";
-import { toLocalDateKey } from "../utils/time.js";
+import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
+import { parseLocalDate, toLocalDateKey } from "../utils/time.js";
 import {
   PROJECT_COLORS,
   PROJECT_ICONS,
@@ -28,6 +29,41 @@ function normalizeDueTime(dueDate, dueTime) {
   if (!dueDate || !value) return null;
   if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new Error("La hora límite no es válida.");
   return value;
+}
+
+function normalizeRecurrenceInput(input, currentRecurrence = null) {
+  if (!input.repeatDaily) return null;
+  const startDate = String(input.recurrenceStartDate ?? "").trim();
+  const endDate = String(input.recurrenceEndDate ?? "").trim() || null;
+  if (!parseLocalDate(startDate)) throw new Error("Elige una fecha inicial para la repetición diaria.");
+  if (endDate && !parseLocalDate(endDate)) throw new Error("La fecha final de repetición no es válida.");
+  if (endDate && endDate < startDate) throw new Error("La fecha final no puede ser anterior a la fecha inicial.");
+  const completedDates = currentRecurrence?.frequency === "daily"
+    ? currentRecurrence.completedDates.filter((date) => date >= startDate && (!endDate || date <= endDate))
+    : [];
+  return { frequency: "daily", startDate, endDate, completedDates };
+}
+
+function assertRecurringOccurrenceAvailable(task, dateKey) {
+  if (!isDailyRecurringTask(task)) return;
+  if (!isRecurringTaskActiveOn(task, dateKey)) {
+    if (dateKey < task.recurrence.startDate) throw new Error("Esta tarea diaria todavía no ha comenzado.");
+    throw new Error("El periodo de esta tarea diaria ya terminó.");
+  }
+  if (isRecurringOccurrenceCompleted(task, dateKey)) throw new Error("La tarea de hoy ya está completada.");
+}
+
+function completeTaskOccurrence(task, dateKey, now) {
+  if (!isDailyRecurringTask(task)) {
+    task.status = "completed";
+    task.completedAt = now.toISOString();
+    return;
+  }
+  if (!task.recurrence.completedDates.includes(dateKey)) task.recurrence.completedDates.push(dateKey);
+  task.recurrence.completedDates.sort();
+  const seriesEnded = task.recurrence.endDate === dateKey;
+  task.status = seriesEnded ? "completed" : "in_progress";
+  task.completedAt = seriesEnded ? now.toISOString() : null;
 }
 
 export class StudyHubRepository {
@@ -109,14 +145,16 @@ export class StudyHubRepository {
     if (!project) throw new Error("El proyecto ya no existe.");
     const title = cleanText(input.title, 100);
     if (!title) throw new Error("Escribe un nombre para la tarea.");
+    const recurrence = normalizeRecurrenceInput(input);
     const task = {
       id: createId("task"),
       projectId,
       title,
       description: cleanText(input.description, 500),
       status: TASK_STATUSES.includes(input.status) ? input.status : "pending",
-      dueDate: input.dueDate || null,
-      dueTime: normalizeDueTime(input.dueDate, input.dueTime),
+      dueDate: recurrence ? null : input.dueDate || null,
+      dueTime: recurrence ? null : normalizeDueTime(input.dueDate, input.dueTime),
+      recurrence,
       accumulatedSeconds: 0,
       createdAt: this.clock().toISOString(),
       completedAt: input.status === "completed" ? this.clock().toISOString() : null,
@@ -133,8 +171,13 @@ export class StudyHubRepository {
       if (!title) throw new Error("Escribe un nombre para la tarea.");
       task.title = title;
       task.description = cleanText(input.description, 500);
-      task.dueDate = input.dueDate || null;
-      task.dueTime = normalizeDueTime(input.dueDate, input.dueTime);
+      task.recurrence = normalizeRecurrenceInput(input, task.recurrence);
+      task.dueDate = task.recurrence ? null : input.dueDate || null;
+      task.dueTime = task.recurrence ? null : normalizeDueTime(input.dueDate, input.dueTime);
+      if (task.recurrence && task.status === "completed" && (!task.recurrence.endDate || task.recurrence.completedDates.at(-1) !== task.recurrence.endDate)) {
+        task.status = "in_progress";
+        task.completedAt = null;
+      }
     });
   }
 
@@ -192,6 +235,7 @@ export class StudyHubRepository {
       const task = state.tasks.find((item) => item.id === taskId);
       if (!task) throw new Error("La tarea ya no existe.");
       if (task.status === "completed") throw new Error("Reabre la tarea antes de iniciar otra sesión.");
+      assertRecurringOccurrenceAvailable(task, toLocalDateKey(now));
       if (state.pendingCompletion) throw new Error("Guarda u omite la reflexión pendiente antes de iniciar otra sesión.");
       if (state.activeTimer) {
         if (state.activeTimer.taskId !== taskId) throw new Error("Ya hay una sesión activa. Deténla antes de cambiar de tarea.");
@@ -275,6 +319,8 @@ export class StudyHubRepository {
       const task = state.tasks.find((item) => item.id === taskId);
       if (!task) throw new Error("La tarea ya no existe.");
       if (task.status === "completed") return;
+      const occurrenceDate = toLocalDateKey(now);
+      assertRecurringOccurrenceAvailable(task, occurrenceDate);
       if (state.pendingCompletion) throw new Error("Guarda u omite la reflexión pendiente antes de completar la tarea.");
       let focusSessionId = null;
       let pausedTaskTitle = null;
@@ -293,8 +339,8 @@ export class StudyHubRepository {
           .sort((a, b) => b.endedAt.localeCompare(a.endedAt))[0];
         focusSessionId = latestUnreflected?.id ?? null;
       }
-      state.pendingCompletion = { taskId, focusSessionId, kind: "completion", openedAt: now.toISOString() };
-      return { pausedTaskTitle };
+      state.pendingCompletion = { taskId, focusSessionId, kind: "completion", occurrenceDate, openedAt: now.toISOString() };
+      return { pausedTaskTitle, ...(isDailyRecurringTask(task) ? { occurrenceCompletion: true } : {}) };
     });
   }
 
@@ -310,6 +356,9 @@ export class StudyHubRepository {
       if (!task) throw new Error("La tarea ya no existe.");
       if (task.status === "completed") return { alreadyCompleted: true, pausedTaskTitle: null };
       if (state.pendingCompletion) throw new Error("Guarda u omite la reflexión pendiente antes de completar la tarea.");
+      const occurrenceDate = toLocalDateKey(now);
+      if (isDailyRecurringTask(task) && isRecurringOccurrenceCompleted(task, occurrenceDate)) return { alreadyCompleted: true, pausedTaskTitle: null };
+      assertRecurringOccurrenceAvailable(task, occurrenceDate);
 
       let focusSessionId = null;
       let pausedTaskTitle = null;
@@ -337,16 +386,15 @@ export class StudyHubRepository {
         projectId: task.projectId,
         taskId: task.id,
         focusSessionId,
-        date: toLocalDateKey(now),
+        date: occurrenceDate,
         createdAt: now.toISOString(),
         learned,
         unresolved,
         nextSession,
         learnedImages,
       });
-      task.status = "completed";
-      task.completedAt = now.toISOString();
-      return { pausedTaskTitle };
+      completeTaskOccurrence(task, occurrenceDate, now);
+      return { pausedTaskTitle, ...(isDailyRecurringTask(task) ? { occurrenceCompleted: true } : {}) };
     });
   }
 
@@ -367,6 +415,8 @@ export class StudyHubRepository {
       if (!pending) throw new Error("Esta reflexión ya fue guardada o cancelada.");
       const task = state.tasks.find((item) => item.id === pending.taskId);
       if (!task) throw new Error("La tarea ya no existe.");
+      const occurrenceDate = pending.occurrenceDate || toLocalDateKey(now);
+      if ((pending.kind ?? "completion") === "completion") assertRecurringOccurrenceAvailable(task, occurrenceDate);
       if (pending.focusSessionId && state.learningEntries.some((entry) => entry.focusSessionId === pending.focusSessionId)) {
         throw new Error("Esta sesión ya tiene una reflexión guardada.");
       }
@@ -375,7 +425,7 @@ export class StudyHubRepository {
         projectId: task.projectId,
         taskId: task.id,
         focusSessionId: pending.focusSessionId,
-        date: toLocalDateKey(now),
+        date: occurrenceDate,
         createdAt: now.toISOString(),
         learned,
         unresolved,
@@ -383,8 +433,7 @@ export class StudyHubRepository {
         learnedImages,
       });
       if ((pending.kind ?? "completion") === "completion") {
-        task.status = "completed";
-        task.completedAt = now.toISOString();
+        completeTaskOccurrence(task, occurrenceDate, now);
       }
       state.pendingCompletion = null;
     });

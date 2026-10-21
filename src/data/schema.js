@@ -101,6 +101,19 @@ export function validateState(candidate) {
     assert(task.dueTime === undefined || task.dueTime === null || isTimeKey(task.dueTime), "Hay una hora límite inválida.");
     assert(!task.dueTime || task.dueDate !== null, "La hora límite necesita una fecha.");
     assert(Number.isInteger(task.accumulatedSeconds) && task.accumulatedSeconds >= 0, "Hay tiempo acumulado inválido.");
+    if (task.recurrence !== undefined && task.recurrence !== null) {
+      assert(task.recurrence.frequency === "daily", "Hay una repetición de tarea no compatible.");
+      assert(Boolean(parseLocalDate(task.recurrence.startDate)), "La tarea repetitiva necesita una fecha inicial válida.");
+      assert(task.recurrence.endDate === null || Boolean(parseLocalDate(task.recurrence.endDate)), "La fecha final de repetición no es válida.");
+      assert(!task.recurrence.endDate || task.recurrence.endDate >= task.recurrence.startDate, "La repetición termina antes de comenzar.");
+      assert(Array.isArray(task.recurrence.completedDates), "Faltan los días completados de una tarea repetitiva.");
+      const completedDates = new Set();
+      for (const date of task.recurrence.completedDates) {
+        assert(Boolean(parseLocalDate(date)) && !completedDates.has(date), "Hay días repetidos o inválidos en una tarea repetitiva.");
+        assert(date >= task.recurrence.startDate && (!task.recurrence.endDate || date <= task.recurrence.endDate), "Hay un día completado fuera del periodo de repetición.");
+        completedDates.add(date);
+      }
+    }
   }
 
   const sessionIds = new Set();
@@ -164,6 +177,7 @@ export function validateState(candidate) {
     assert(candidate.pendingCompletion.focusSessionId === null || pendingSession?.taskId === candidate.pendingCompletion.taskId, "La reflexión pendiente contiene una sesión inválida.");
     assert(!candidate.pendingCompletion.focusSessionId || !reflectedSessionIds.has(candidate.pendingCompletion.focusSessionId), "La sesión pendiente ya tiene una reflexión.");
     assert(candidate.pendingCompletion.kind === undefined || ["session", "completion"].includes(candidate.pendingCompletion.kind), "La reflexión pendiente contiene un tipo inválido.");
+    assert(candidate.pendingCompletion.occurrenceDate === undefined || Boolean(parseLocalDate(candidate.pendingCompletion.occurrenceDate)), "La reflexión pendiente contiene un día de repetición inválido.");
     if (candidate.pendingCompletion.kind === "session") assert(candidate.pendingCompletion.focusSessionId !== null, "La reflexión de sesión necesita una sesión guardada.");
     assert(isIsoTimestamp(candidate.pendingCompletion.openedAt), "La reflexión pendiente contiene una fecha inválida.");
   }
@@ -183,7 +197,15 @@ export function normalizeState(candidate) {
   state.tasks = state.tasks.map((task) => {
     const dueDate = task.dueDate || null;
     const dueTime = dueDate && isTimeKey(task.dueTime) ? task.dueTime : null;
-    return { ...task, description: String(task.description ?? "").slice(0, 500), dueDate, dueTime, completedAt: task.completedAt || null };
+    const recurrence = task.recurrence?.frequency === "daily" && parseLocalDate(task.recurrence.startDate)
+      ? {
+          frequency: "daily",
+          startDate: task.recurrence.startDate,
+          endDate: parseLocalDate(task.recurrence.endDate) && task.recurrence.endDate >= task.recurrence.startDate ? task.recurrence.endDate : null,
+          completedDates: [...new Set((Array.isArray(task.recurrence.completedDates) ? task.recurrence.completedDates : []).filter((date) => parseLocalDate(date) && date >= task.recurrence.startDate && (!task.recurrence.endDate || date <= task.recurrence.endDate)))].sort(),
+        }
+      : null;
+    return { ...task, description: String(task.description ?? "").slice(0, 500), dueDate: recurrence ? null : dueDate, dueTime: recurrence ? null : dueTime, recurrence, completedAt: task.completedAt || null };
   });
   state.focusSessions = state.focusSessions.map((session) => ({ ...session, reason: String(session.reason || "stopped") }));
   state.learningEntries = state.learningEntries.map((entry) => {

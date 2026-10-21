@@ -1,6 +1,7 @@
 import { PROJECT_COLORS, PROJECT_ICONS } from "../data/schema.js";
 import { projectStats } from "../state/selectors.js";
-import { differenceInCalendarDays, dueCategory, formatDate, formatDuration, formatTime, relativeDueLabel } from "../utils/time.js";
+import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
+import { differenceInCalendarDays, dueCategory, formatDate, formatDuration, formatTime, relativeDueLabel, toLocalDateKey } from "../utils/time.js";
 import { escapeHtml } from "../utils/text.js";
 import { MAX_LEARNING_IMAGES, normalizeLearningImages } from "../utils/learningImages.js";
 import { icon } from "./icons.js";
@@ -38,14 +39,16 @@ export function projectIcon(project, size = 32) {
   return `<span class="project-icon" style="--project:${escapeHtml(project.color)}">${icon(project.icon, size)}</span>`;
 }
 
-export function statusChip(task, expanded = false) {
-  const meta = STATUS_META[task.status];
+export function statusChip(task, expanded = false, dateKey = toLocalDateKey()) {
+  const completedToday = isRecurringOccurrenceCompleted(task, dateKey);
+  const meta = completedToday ? { label: "Hecha hoy", tone: "green" } : STATUS_META[task.status];
   return `<button class="status-chip status-${meta.tone}" type="button" data-action="toggle-status" data-task-id="${escapeHtml(task.id)}" aria-haspopup="menu" aria-expanded="${expanded}"><span class="status-dot"></span>${meta.label}</button>`;
 }
 
-export function statusMenu(task) {
+export function statusMenu(task, dateKey = toLocalDateKey()) {
+  const currentStatus = isRecurringOccurrenceCompleted(task, dateKey) ? "completed" : task.status;
   return `<div class="floating-menu status-menu" role="menu" aria-label="Cambiar estado de ${escapeHtml(task.title)}">
-    ${Object.entries(STATUS_META).map(([status, meta]) => `<button type="button" role="menuitemradio" aria-checked="${task.status === status}" data-action="set-status" data-task-id="${escapeHtml(task.id)}" data-status="${status}" class="status-option status-${meta.tone}"><span class="status-dot"></span>${meta.label}${task.status === status ? icon("check", 15) : ""}</button>`).join("")}
+    ${Object.entries(STATUS_META).map(([status, meta]) => `<button type="button" role="menuitemradio" aria-checked="${currentStatus === status}" data-action="set-status" data-task-id="${escapeHtml(task.id)}" data-status="${status}" class="status-option status-${meta.tone}"><span class="status-dot"></span>${status === "completed" && isDailyRecurringTask(task) ? "Completar hoy" : meta.label}${currentStatus === status ? icon("check", 15) : ""}</button>`).join("")}
   </div>`;
 }
 
@@ -55,15 +58,17 @@ export function taskFilterMenu(ui) {
 }
 
 export function taskRow(task, options = {}) {
+  const dateKey = options.todayKey ?? toLocalDateKey();
+  const completedToday = isRecurringOccurrenceCompleted(task, dateKey);
   const selected = options.selectedTaskId === task.id;
   const menuOpen = options.menu?.type === "status" && options.menu.taskId === task.id;
   const anyMenuOpen = options.menu?.taskId === task.id;
   const category = dueCategory(task);
   return `<article class="task-row ${selected ? "is-selected" : ""} ${options.dateSelected ? "is-date-selected" : ""} ${anyMenuOpen ? "has-open-menu" : ""}" data-task-id="${escapeHtml(task.id)}" tabindex="0" aria-label="Abrir ${escapeHtml(task.title)}">
-    <span class="task-radio ${task.status === "completed" ? "is-complete" : ""}">${task.status === "completed" ? icon("check", 13) : ""}</span>
+    <span class="task-radio ${task.status === "completed" || completedToday ? "is-complete" : ""}">${task.status === "completed" || completedToday ? icon("check", 13) : ""}</span>
     <div class="task-copy"><strong>${escapeHtml(task.title)}</strong>${options.showDescription && task.description ? `<small>${escapeHtml(task.description)}</small>` : ""}</div>
-    ${task.dueDate ? `<span class="date-chip due-${category}">${icon("calendar", 14)}${escapeHtml(formatDate(task.dueDate, { year: true }))}</span>` : ""}
-    <span class="status-wrap">${statusChip(task, menuOpen)}${menuOpen ? statusMenu(task) : ""}</span>
+    ${isDailyRecurringTask(task) ? `<span class="date-chip recurrence-chip">${icon("calendar", 14)}Diaria${task.recurrence.endDate ? ` · hasta ${escapeHtml(formatDate(task.recurrence.endDate))}` : ""}</span>` : task.dueDate ? `<span class="date-chip due-${category}">${icon("calendar", 14)}${escapeHtml(formatDate(task.dueDate, { year: true }))}</span>` : ""}
+    <span class="status-wrap">${statusChip(task, menuOpen, dateKey)}${menuOpen ? statusMenu(task, dateKey) : ""}</span>
     <span class="task-time">${task.accumulatedSeconds ? escapeHtml(formatDuration(task.accumulatedSeconds, true)) : ""}</span>
     <button class="icon-button task-more" type="button" data-action="toggle-task-menu" data-task-id="${escapeHtml(task.id)}" aria-label="Más opciones para ${escapeHtml(task.title)}">${icon("more", 20)}</button>
     ${options.menu?.type === "task" && options.menu.taskId === task.id ? taskActionMenu(task) : ""}
@@ -101,7 +106,9 @@ export function dueNotice(tasks) {
 function globalTaskCard(task, project, now) {
   const dateClass = task.dueDate ? `due-${dueCategory(task, now)}` : "";
   const statusLabel = task.status === "in_progress" ? "En curso" : "Pendiente";
-  const dueLabel = task.dueDate
+  const dueLabel = task.agendaRecurrence
+    ? "Hoy · diaria"
+    : task.dueDate
     ? `${relativeDueLabel(task.dueDate, now)}${formatTime(task.dueTime) ? ` · ${formatTime(task.dueTime)}` : ""}`
     : statusLabel;
   return `<button class="global-task-card ${dateClass}" type="button" data-action="open-global-task" data-project-id="${escapeHtml(task.projectId)}" data-task-id="${escapeHtml(task.id)}" aria-label="Abrir ${escapeHtml(task.title)}">
@@ -113,11 +120,13 @@ function globalTaskCard(task, project, now) {
 
 export function globalTasksPanel(state, now = new Date()) {
   const projects = new Map(state.projects.map((project) => [project.id, project]));
-  const openTasks = state.tasks.filter((task) => task.status !== "completed");
-  const dated = openTasks
+  const todayKey = toLocalDateKey(now);
+  const openTasks = state.tasks.filter((task) => task.status !== "completed" && (!isDailyRecurringTask(task) || (isRecurringTaskActiveOn(task, todayKey) && !isRecurringOccurrenceCompleted(task, todayKey))));
+  const agendaTasks = openTasks.map((task) => isDailyRecurringTask(task) ? { ...task, dueDate: todayKey, agendaRecurrence: true } : task);
+  const dated = agendaTasks
     .filter((task) => task.dueDate)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || String(a.dueTime || "23:59").localeCompare(String(b.dueTime || "23:59")) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
-  const undated = openTasks
+  const undated = agendaTasks
     .filter((task) => !task.dueDate)
     .sort((a, b) => Number(b.status === "in_progress") - Number(a.status === "in_progress") || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   const renderGroup = (tasks, emptyMessage) => tasks.length
@@ -188,21 +197,26 @@ export function projectFormDialog(project = null) {
 
 export function taskFormDialog(projectId, task = null, { filesEnabled = false, selectedFiles = [] } = {}) {
   const isEdit = Boolean(task?.id);
+  const hasRepeatDraft = task && Object.hasOwn(task, "repeatDaily");
+  const repeatsDaily = hasRepeatDraft ? task.repeatDaily === "daily" : isDailyRecurringTask(task);
+  const recurrenceStartDate = task?.recurrenceStartDate ?? task?.recurrence?.startDate ?? toLocalDateKey();
+  const recurrenceEndDate = task?.recurrenceEndDate ?? task?.recurrence?.endDate ?? "";
   const filesField = !isEdit && filesEnabled ? `<div class="task-create-files"><p>Archivos adjuntos <span>opcional</span></p><label class="task-create-file-picker">${icon("upload", 17)} Elegir archivos<input class="sr-only" type="file" multiple data-input="new-task-files" aria-label="Elegir archivos para la nueva tarea" /></label><small>Hasta 20 MB por archivo. Puedes añadirlos también después de crear la tarea.</small><div class="task-create-files-selected" data-selected-task-files aria-live="polite">${selectedFiles.length ? `<ul>${selectedFiles.map((file) => `<li>${escapeHtml(file.name)}</li>`).join("")}</ul>` : "Ningún archivo seleccionado"}</div></div>` : "";
-  return `<dialog class="app-dialog" id="task-dialog" aria-labelledby="task-dialog-title"><form data-form="task" data-project-id="${escapeHtml(projectId)}" data-task-id="${escapeHtml(task?.id ?? "")}"><div class="dialog-heading"><div><p class="eyebrow">Plan de estudio</p><h2 id="task-dialog-title">${isEdit ? "Editar tarea" : "Nueva tarea"}</h2></div><button class="icon-button" type="button" data-action="close-dialog" aria-label="Cerrar">${icon("x")}</button></div><label>Nombre de la tarea<input name="title" maxlength="100" required value="${escapeHtml(task?.title ?? "")}" placeholder="Ej. Resolver ejercicios" autofocus /></label><label>Descripción <span>opcional</span><textarea name="description" maxlength="500" rows="3" placeholder="Añade contexto o pasos importantes">${escapeHtml(task?.description ?? "")}</textarea></label><div class="task-deadline-fields"><label>Fecha límite <span>opcional</span><input name="dueDate" type="date" value="${escapeHtml(task?.dueDate ?? "")}" /></label><label>Hora límite <span>opcional</span><input name="dueTime" type="time" value="${escapeHtml(task?.dueTime ?? "")}" /></label></div><p class="field-note">La hora se guardará solamente si también eliges una fecha.</p>${isEdit ? "" : `<label>Estado<select name="status"><option value="pending" ${task?.status === "pending" || !task?.status ? "selected" : ""}>Pendiente</option><option value="in_progress" ${task?.status === "in_progress" ? "selected" : ""}>En curso</option></select></label><p class="field-note">Para marcarla como completada, guarda primero una reflexión.</p>`}${filesField}<div class="dialog-actions"><button class="secondary-button" type="button" data-action="close-dialog">Cancelar</button><button class="primary-button" type="submit">${isEdit ? "Guardar cambios" : "Crear tarea"}</button></div></form></dialog>`;
+  return `<dialog class="app-dialog" id="task-dialog" aria-labelledby="task-dialog-title"><form data-form="task" data-project-id="${escapeHtml(projectId)}" data-task-id="${escapeHtml(task?.id ?? "")}"><div class="dialog-heading"><div><p class="eyebrow">Plan de estudio</p><h2 id="task-dialog-title">${isEdit ? "Editar tarea" : "Nueva tarea"}</h2></div><button class="icon-button" type="button" data-action="close-dialog" aria-label="Cerrar">${icon("x")}</button></div><label>Nombre de la tarea<input name="title" maxlength="100" required value="${escapeHtml(task?.title ?? "")}" placeholder="Ej. Resolver ejercicios" autofocus /></label><label>Descripción <span>opcional</span><textarea name="description" maxlength="500" rows="3" placeholder="Añade contexto o pasos importantes">${escapeHtml(task?.description ?? "")}</textarea></label><label class="task-repeat-control"><input type="checkbox" name="repeatDaily" value="daily" ${repeatsDaily ? "checked" : ""}/><span><strong>Repetir diariamente</strong><small>Completa cada día sin cerrar la tarea completa.</small></span></label><div class="task-deadline-block"><div class="task-deadline-fields"><label>Fecha límite <span>opcional</span><input name="dueDate" type="date" value="${escapeHtml(task?.dueDate ?? "")}" /></label><label>Hora límite <span>opcional</span><input name="dueTime" type="time" value="${escapeHtml(task?.dueTime ?? "")}" /></label></div><p class="field-note">La hora se guardará solamente si también eliges una fecha.</p></div><div class="task-recurrence-fields"><div class="task-deadline-fields"><label>Comienza el<input name="recurrenceStartDate" type="date" value="${escapeHtml(recurrenceStartDate)}" /></label><label>Termina el <span>opcional</span><input name="recurrenceEndDate" type="date" min="${escapeHtml(recurrenceStartDate)}" value="${escapeHtml(recurrenceEndDate)}" /></label></div><p class="field-note">Sin fecha final, la tarea seguirá apareciendo todos los días.</p></div>${isEdit ? "" : `<label>Estado<select name="status"><option value="pending" ${task?.status === "pending" || !task?.status ? "selected" : ""}>Pendiente</option><option value="in_progress" ${task?.status === "in_progress" ? "selected" : ""}>En curso</option></select></label><p class="field-note">Para marcarla como completada, guarda primero una reflexión.</p>`}${filesField}<div class="dialog-actions"><button class="secondary-button" type="button" data-action="close-dialog">Cancelar</button><button class="primary-button" type="submit">${isEdit ? "Guardar cambios" : "Crear tarea"}</button></div></form></dialog>`;
 }
 
 export function reflectionDialog(task, draft = {}, pending = {}) {
   const normalizedDraft = normalizeLearningDraft(draft);
   const completesTask = (pending.kind ?? "completion") === "completion";
-  const title = completesTask ? "Reflexiona antes de completar" : "Reflexión de la sesión";
+  const recurringCompletion = completesTask && isDailyRecurringTask(task);
+  const title = recurringCompletion ? "Reflexiona para completar el día" : completesTask ? "Reflexiona antes de completar" : "Reflexión de la sesión";
   const hint = completesTask
-    ? "La tarea se marcará como completada solo cuando guardes esta reflexión."
+    ? recurringCompletion ? "Se completará únicamente la actividad de hoy. La tarea volverá a estar disponible el siguiente día." : "La tarea se marcará como completada solo cuando guardes esta reflexión."
     : "La sesión y su tiempo ya están guardados. Puedes omitir la reflexión sin perderlos.";
   const otherTimerHint = completesTask && pending.activeTaskTitle
     ? `<p class="field-note">La sesión de “${escapeHtml(pending.activeTaskTitle)}” quedó pausada. Podrás reanudarla después sin perder el tiempo acumulado.</p>`
     : "";
-  const submitLabel = completesTask ? "Guardar y completar" : "Guardar reflexión";
+  const submitLabel = recurringCompletion ? "Guardar y completar hoy" : completesTask ? "Guardar y completar" : "Guardar reflexión";
   return `<dialog class="app-dialog reflection-dialog" id="reflection-dialog" aria-labelledby="reflection-title"><form data-form="reflection" data-task-id="${escapeHtml(task?.id ?? "")}"><div class="dialog-heading"><div><p class="eyebrow">Cierre de sesión</p><h2 id="reflection-title">${title}</h2><p>${escapeHtml(task?.title || "Tarea")}</p></div></div>${otherTimerHint}<div class="dialog-learning-field"><label for="reflection-learned">¿Qué aprendí? <span>obligatorio</span></label>${learningImages(normalizedDraft.learnedImages, { editable: true, taskId: task?.id, scope: "reflection" })}<textarea id="reflection-learned" name="learned" rows="4" maxlength="1200" required placeholder="Resume la idea más importante…" autofocus>${escapeHtml(normalizedDraft.learned)}</textarea>${learningImageControls(normalizedDraft.learnedImages, task?.id, "reflection")}</div><label>¿Qué me faltó por responder / qué no entendí? <span>opcional</span><textarea name="unresolved" rows="3" maxlength="1200" placeholder="Registra tus dudas para retomarlas…">${escapeHtml(normalizedDraft.unresolved)}</textarea></label><label>¿Qué haré en la siguiente sesión? <span>opcional</span><textarea name="nextSession" rows="3" maxlength="1200" placeholder="Define un siguiente paso concreto…">${escapeHtml(normalizedDraft.nextSession)}</textarea></label><p class="form-hint">${hint}</p><div class="dialog-actions"><button class="secondary-button" type="button" data-action="cancel-reflection">${completesTask ? "Ahora no" : "Omitir"}</button><button class="primary-button" type="submit">${icon("check")} ${submitLabel}</button></div></form></dialog>`;
 }
 
