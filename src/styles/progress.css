@@ -1,0 +1,74 @@
+.project-section-tabs { width: min(1340px, calc(100% - 48px)); display: flex; gap: 7px; margin: 8px auto 0; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: rgba(13,28,45,.76); }
+.project-section-tabs a { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; color: var(--muted); border-radius: 8px; font-size: .86rem; font-weight: 700; }
+.project-section-tabs a.active { color: white; background: rgba(38,111,222,.5); box-shadow: inset 0 0 0 1px rgba(88,151,255,.28); }
+.progress-page { width: min(1390px,100%); margin: 0 auto; padding: 18px clamp(24px,4vw,54px) 60px; }
+.progress-page > .project-section-tabs,.project-page > .project-section-tabs { width: 100%; }
+.progress-page > .project-heading { padding: 0; }
+.progress-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin: 22px 0 16px; }
+.progress-toolbar h2 { margin: 0; font-size: 1.65rem; }
+.progress-toolbar p { margin: 5px 0 0; color: var(--muted); }
+.progress-toolbar > div:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.evaluation-period { display: flex; flex-wrap: wrap; gap: 7px; }
+.evaluation-period select,.evaluation-period input { min-height: 38px; padding: 7px 9px; color: var(--text); border: 1px solid var(--line); border-radius: 8px; background: #0b1b2d; }
+.secondary-button.compact,.primary-button.compact { min-height: 38px; width: auto; padding: 0 13px; font-size: .76rem; }
+.progress-settings { margin-bottom: 16px; border: 1px solid var(--line); border-radius: 13px; background: rgba(16,31,49,.78); }
+.progress-settings summary,.create-panel summary,.manual-evaluation summary { display: flex; align-items: center; gap: 9px; padding: 14px 16px; font-weight: 750; cursor: pointer; }
+.progress-settings form { display: grid; grid-template-columns: repeat(5,minmax(120px,1fr)) auto; gap: 10px; padding: 0 16px 14px; }
+.progress-settings form.rubric-settings { grid-template-columns: repeat(4,minmax(120px,1fr)) auto; align-items: end; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.rubric-settings > strong { grid-column: 1/-1; font-size: .78rem; }
+.progress-settings label,.exercise-form label,.inline-create-form label,.manual-evaluation label { display: grid; gap: 6px; color: #c8d6ea; font-size: .76rem; font-weight: 650; }
+.progress-settings input,.progress-settings select,.exercise-form input,.exercise-form select,.exercise-form textarea,.inline-create-form input,.inline-create-form select,.inline-create-form textarea,.manual-evaluation input,.manual-evaluation select,.manual-evaluation textarea,.deliverable-item input,.deliverable-item select { width: 100%; min-height: 40px; padding: 8px 10px; color: var(--text); border: 1px solid var(--line); border-radius: 8px; background: #0b1b2d; }
+.progress-settings > p { margin: 0; padding: 0 16px 14px; color: var(--muted); font-size: .75rem; }
+.progress-metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
+.progress-metric { min-height: 96px; display: flex; flex-direction: column; justify-content: center; padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: linear-gradient(145deg,rgba(20,39,61,.94),rgba(12,27,44,.94)); }
+.progress-metric span,.progress-metric small { color: var(--muted); font-size: .75rem; }
+.progress-metric strong { margin: 5px 0; font-size: 1.45rem; }
+.progress-grid { display: grid; grid-template-columns: minmax(0,.88fr) minmax(0,1.12fr); gap: 16px; margin-bottom: 16px; }
+.progress-card { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg,rgba(19,36,56,.96),rgba(11,25,41,.96)); box-shadow: var(--shadow); }
+.progress-card > header,.stage-item > header,.exercise-item > header,.evaluation-item > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.progress-card h2 { margin: 0; font-size: 1.13rem; }
+.progress-card > header p { margin: 4px 0 0; color: var(--muted); font-size: .76rem; }
+.progress-card > header > span { color: #8bbcff; font-weight: 800; }
+.competency-list,.exercise-list,.evaluation-list { display: grid; gap: 9px; margin-top: 14px; }
+.competency-item { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 12px; padding: 12px; border: 1px solid rgba(69,100,140,.5); border-radius: 10px; background: rgba(9,24,40,.56); }
+.competency-item.is-child { margin-left: 24px; }
+.competency-item p,.exercise-item p,.evaluation-item p { margin: 4px 0 0; color: var(--muted); font-size: .74rem; line-height: 1.5; white-space: pre-wrap; }
+.competency-score { display: grid; justify-items: end; gap: 2px; }
+.competency-score b { color: #78b5ff; }
+.competency-score small,.competency-score em { color: var(--muted); font-size: .66rem; font-style: normal; }
+.trend { min-width: 35px; color: var(--green); text-align: right; }.trend.down{color:#ff7183}
+.inline-create-form,.exercise-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.inline-create-form h3,.inline-create-form .wide,.exercise-form .wide,.exercise-form > button { grid-column: 1/-1; }
+.inline-create-form h3 { margin: 0; }
+.checkbox-field { display: flex !important; grid-template-columns: auto 1fr !important; align-items: center; }
+.checkbox-field input { width: auto; }
+.exercise-item,.evaluation-item,.stage-item { padding: 13px; border: 1px solid rgba(68,101,143,.55); border-radius: 11px; background: rgba(8,23,39,.6); }
+.exercise-item header small,.evaluation-item header small,.stage-item header small { display: block; margin-top: 4px; color: var(--muted); font-size: .68rem; }
+.exercise-item header > span { color: #9ab3d3; font-size: .7rem; }
+.exercise-tags,.evaluation-state { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.exercise-tags span,.evaluation-state span { padding: 4px 8px; color: #9dc8ff; border: 1px solid rgba(58,129,222,.3); border-radius: 999px; background: rgba(35,95,173,.12); font-size: .66rem; }
+.exercise-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.offline-note { display: block; margin-top: 8px; color: #f0b65c; }
+.create-panel,.manual-evaluation { margin-top: 13px; border: 1px solid rgba(75,108,151,.45); border-radius: 10px; background: rgba(9,25,42,.45); }
+.manual-evaluation form { padding: 0 12px 12px; }.rubric-score-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.three-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:10px 0}
+.evaluation-item > header b { color: #75b5ff; font-size: 1.2rem; }.evaluation-item details{margin-top:10px}.evaluation-item li{margin:8px 0;color:#c8d5e7;font-size:.78rem}.evaluation-item h4{margin-bottom:6px}
+.model-comparisons { margin-top: 14px; padding: 12px; border: 1px solid rgba(86,137,205,.45); border-radius: 11px; background: rgba(16,39,66,.54); }
+.model-comparisons h3 { margin: 0 0 9px; font-size: .9rem; }
+.model-comparisons article { padding: 9px 0; border-top: 1px solid var(--line-soft); }
+.model-comparisons article:first-of-type { border-top: 0; }
+.model-comparisons article > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+.model-comparisons span { padding: 5px 8px; color: var(--muted); border-radius: 8px; background: rgba(7,20,34,.7); font-size: .7rem; }
+.model-comparisons p { margin: 7px 0 0; color: var(--muted); font-size: .7rem; }
+.stage-item { margin-top: 12px; }.stage-item > header b{color:#8dbfff;font-size:.74rem}.deliverable-list{display:grid;gap:7px;margin-top:10px}.deliverable-item{display:grid;grid-template-columns:minmax(0,1fr) 160px minmax(130px,.7fr) auto;align-items:center;gap:8px;padding:9px;border:1px solid rgba(68,101,143,.36);border-radius:9px}.deliverable-item small,.deliverable-item em{display:block;margin-top:3px;color:var(--muted);font-size:.68rem}.deliverable-item em{color:#ff8a9a}
+.usage-card { margin-top: 16px; }.usage-table{margin-top:12px;overflow:auto}.usage-row{min-width:720px;display:grid;grid-template-columns:.7fr 1.4fr .6fr .6fr .7fr .7fr;gap:8px;padding:9px;border-top:1px solid var(--line-soft);font-size:.72rem}.usage-row.heading{color:#8ca2c0;font-weight:750}
+.weekly-card { margin-top: 16px; }
+.weekly-card .progress-metrics { margin: 14px 0 0; }
+.progress-empty { padding: 18px; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; text-align: center; }
+.evidence-card { margin-top: 16px; }
+.evidence-list { display: grid; gap: 8px; margin-top: 14px; }
+.evidence-list article { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 11px 12px; border: 1px solid rgba(68,101,143,.45); border-radius: 10px; background: rgba(8,23,39,.55); }
+.evidence-list article p { margin: 4px 0 0; color: var(--muted); font-size: .74rem; white-space: pre-wrap; }
+.evidence-list article > span { flex: 0 0 auto; padding: 4px 8px; color: #9dc8ff; border: 1px solid rgba(58,129,222,.3); border-radius: 999px; font-size: .66rem; }
+.evaluation-import { cursor: pointer; }
+@media(max-width:1100px){.progress-settings form,.progress-settings form.rubric-settings{grid-template-columns:repeat(2,1fr)}.progress-metrics{grid-template-columns:repeat(2,1fr)}.progress-grid{grid-template-columns:1fr}.deliverable-item{grid-template-columns:1fr 1fr}.deliverable-item>div{grid-column:1/-1}}
+@media(max-width:650px){.progress-page{padding:14px 16px 40px}.project-section-tabs{width:calc(100% - 32px)}.progress-toolbar{align-items:stretch;flex-direction:column}.progress-toolbar>div:last-child{justify-content:flex-start}.progress-settings form,.progress-metrics,.inline-create-form,.exercise-form,.rubric-score-grid,.three-fields{grid-template-columns:1fr}.deliverable-item{grid-template-columns:1fr}.competency-item{grid-template-columns:1fr}.competency-score{justify-items:start}.competency-item.is-child{margin-left:12px}}

@@ -10,6 +10,7 @@ export function parseRoute(hash = globalThis.location?.hash ?? "") {
   if (parts[0] !== "projects") return { name: "projects" };
   if (parts.length === 1) return { name: "projects" };
   if (parts.length === 2) return { name: "project", projectId: parts[1] };
+  if (parts[2] === "progress" && parts.length === 3) return { name: "progress", projectId: parts[1] };
   if (parts[2] === "tasks" && parts[3]) return { name: "focus", projectId: parts[1], taskId: parts[3] };
   return { name: "projects" };
 }

@@ -1,7 +1,8 @@
 import { addDaysKey, parseLocalDate, toLocalDateKey } from "../utils/time.js";
 import { MAX_LEARNING_IMAGES, isLearningImageDataUrl, normalizeLearningImages } from "../utils/learningImages.js";
+import { AI_PROFILES, AI_PROVIDERS, DEFAULT_RUBRIC, DELIVERABLE_STATUSES, HELP_LEVELS, PRIVACY_MODES, PROJECT_TYPES, VALIDATION_STATES, defaultEvaluationConfig } from "../evaluation/constants.js";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const TASK_STATUSES = ["pending", "in_progress", "completed"];
 export const PROJECT_STATUSES = ["active", "completed"];
 export const TIMER_MODES = ["countdown", "infinite"];
@@ -23,6 +24,14 @@ export function createEmptyState(now = new Date()) {
     tasks: [],
     focusSessions: [],
     learningEntries: [],
+    competencies: [],
+    exercises: [],
+    evidence: [],
+    evaluations: [],
+    deliveryStages: [],
+    deliverables: [],
+    aiRequests: [],
+    weeklyReviews: [],
     activeTimer: null,
     pendingCompletion: null,
   };
@@ -36,7 +45,7 @@ export function createDemoState(now = new Date()) {
     { id: "project-university", name: "Tareas de la universidad", description: "Trabajos y entregas del semestre.", icon: "graduation", color: "#f34fa5", createdAt: new Date(now.getTime() - 5 * 86_400_000).toISOString() },
     { id: "project-calculus", name: "Estudios de cálculo", description: "Límites, derivadas e integrales.", icon: "calculator", color: "#31d98b", createdAt: new Date(now.getTime() - 9 * 86_400_000).toISOString() },
     { id: "project-english", name: "Estudios de inglés", description: "Vocabulario y práctica semanal.", icon: "book", color: "#ff7b45", createdAt: new Date(now.getTime() - 14 * 86_400_000).toISOString() },
-  ].map((project) => ({ ...project, status: "active", completedAt: null }));
+  ].map((project) => ({ ...project, status: "active", completedAt: null, projectType: "general", evaluationConfig: defaultEvaluationConfig() }));
   state.tasks = [
     { id: "task-workshop", projectId: "project-programming", title: "Resolver taller 2", description: "Ejercicios de funciones y arrays", status: "in_progress", dueDate: addDaysKey(1, now), accumulatedSeconds: 0, createdAt: now.toISOString(), completedAt: null },
     { id: "task-arrays", projectId: "project-programming", title: "Ver video de arrays", description: "Tomar apuntes sobre métodos principales", status: "pending", dueDate: null, accumulatedSeconds: 0, createdAt: now.toISOString(), completedAt: null },
@@ -77,6 +86,9 @@ export function validateState(candidate) {
   assert(candidate.schemaVersion === SCHEMA_VERSION, `Versión de datos no compatible (${candidate.schemaVersion ?? "desconocida"}).`);
   assert(Array.isArray(candidate.projects) && Array.isArray(candidate.tasks), "Faltan proyectos o tareas.");
   assert(Array.isArray(candidate.focusSessions) && Array.isArray(candidate.learningEntries), "Faltan sesiones o registros de aprendizaje.");
+  for (const collection of ["competencies", "exercises", "evidence", "evaluations", "deliveryStages", "deliverables", "aiRequests", "weeklyReviews"]) {
+    assert(Array.isArray(candidate[collection]), `Falta la colección ${collection}.`);
+  }
   assert(candidate.settings && typeof candidate.settings === "object", "Falta la configuración.");
   assert(Number.isSafeInteger(candidate.settings.focusDurationSeconds) && candidate.settings.focusDurationSeconds >= 60, "La duración configurada no es válida.");
   assert(candidate.settings.timerMode === undefined || TIMER_MODES.includes(candidate.settings.timerMode), "El modo del temporizador no es válido.");
@@ -92,6 +104,14 @@ export function validateState(candidate) {
     assert(PROJECT_STATUSES.includes(project.status), "Hay un estado de proyecto inválido.");
     assert(project.completedAt === null || isIsoTimestamp(project.completedAt), "Hay una fecha de finalización de proyecto inválida.");
     assert(project.status === "completed" ? project.completedAt !== null : project.completedAt === null, "El estado del proyecto no coincide con su fecha de finalización.");
+    assert(PROJECT_TYPES.includes(project.projectType), "Hay un tipo de proyecto inválido.");
+    assert(PRIVACY_MODES.includes(project.evaluationConfig?.privacy), "Hay una privacidad de evaluación inválida.");
+    assert(AI_PROVIDERS.includes(project.evaluationConfig?.provider), "Hay un proveedor de evaluación inválido.");
+    assert(AI_PROFILES.includes(project.evaluationConfig?.profile), "Hay un perfil de evaluación inválido.");
+    const criteria = project.evaluationConfig?.rubric?.criteria;
+    assert(Array.isArray(criteria) && criteria.length > 0, "Hay una rúbrica inválida.");
+    assert(criteria.every((item) => isSafeId(item.id) && item.name && Number.isFinite(item.weight) && item.weight >= 0), "Hay criterios de rúbrica inválidos.");
+    assert(Math.round(criteria.reduce((sum, item) => sum + item.weight, 0)) === 100, "Los pesos de la rúbrica deben sumar 100.");
   }
 
   const taskIds = new Set();
@@ -187,11 +207,66 @@ export function validateState(candidate) {
     if (candidate.pendingCompletion.kind === "session") assert(candidate.pendingCompletion.focusSessionId !== null, "La reflexión de sesión necesita una sesión guardada.");
     assert(isIsoTimestamp(candidate.pendingCompletion.openedAt), "La reflexión pendiente contiene una fecha inválida.");
   }
+
+  const competencyIds = new Set();
+  for (const item of candidate.competencies) {
+    assert(isSafeId(item.id) && !competencyIds.has(item.id) && projectIds.has(item.projectId), "Hay competencias inválidas o duplicadas.");
+    competencyIds.add(item.id);
+    assert(typeof item.name === "string" && item.name.trim(), "Hay una competencia sin nombre.");
+  }
+  for (const item of candidate.competencies) assert(item.parentId === null || competencyIds.has(item.parentId), "Hay una subcompetencia sin competencia principal.");
+
+  const exerciseIds = new Set();
+  for (const item of candidate.exercises) {
+    assert(isSafeId(item.id) && !exerciseIds.has(item.id) && projectIds.has(item.projectId), "Hay ejercicios inválidos o duplicados.");
+    exerciseIds.add(item.id);
+    assert(item.title && Number.isInteger(item.difficulty) && item.difficulty >= 1 && item.difficulty <= 5, "Hay un ejercicio sin título o dificultad válida.");
+    assert(HELP_LEVELS.includes(item.helpLevel), "Hay un nivel de ayuda inválido.");
+    assert(item.competencyIds.every((id) => competencyIds.has(id)), "Hay un ejercicio con competencias inválidas.");
+  }
+
+  const evidenceIds = new Set();
+  for (const item of candidate.evidence) {
+    assert(isSafeId(item.id) && !evidenceIds.has(item.id) && projectIds.has(item.projectId), "Hay evidencias inválidas o duplicadas.");
+    evidenceIds.add(item.id);
+    assert(["project", "exercise", "deliverable"].includes(item.targetType) && item.title, "Hay una evidencia sin destino o título válido.");
+    assert(["reported", "attached", "test_passed", "external_verified"].includes(item.kind), "Hay un tipo de evidencia inválido.");
+    assert(item.competencyIds.every((id) => competencyIds.has(id)), "Hay una evidencia con competencias inválidas.");
+    if (item.targetType === "exercise") assert(exerciseIds.has(item.targetId), "Hay una evidencia asociada a un ejercicio inexistente.");
+  }
+
+  const stageIds = new Set();
+  for (const item of candidate.deliveryStages) {
+    assert(isSafeId(item.id) && !stageIds.has(item.id) && projectIds.has(item.projectId) && item.title, "Hay etapas inválidas o duplicadas.");
+    stageIds.add(item.id);
+  }
+  const deliverableIds = new Set();
+  for (const item of candidate.deliverables) {
+    assert(isSafeId(item.id) && !deliverableIds.has(item.id) && projectIds.has(item.projectId) && stageIds.has(item.stageId), "Hay entregables inválidos o duplicados.");
+    deliverableIds.add(item.id);
+    assert(DELIVERABLE_STATUSES.includes(item.status), "Hay un estado de entregable inválido.");
+  }
+  for (const item of candidate.deliverables) assert(item.dependencyIds.every((id) => deliverableIds.has(id) && id !== item.id), "Hay una dependencia de entregable inválida.");
+  for (const item of candidate.evidence) {
+    if (item.targetType === "deliverable") assert(deliverableIds.has(item.targetId), "Hay una evidencia asociada a un entregable inexistente.");
+  }
+
+  const evaluationIds = new Set();
+  for (const item of candidate.evaluations) {
+    assert(isSafeId(item.id) && !evaluationIds.has(item.id) && projectIds.has(item.projectId), "Hay evaluaciones inválidas o duplicadas.");
+    evaluationIds.add(item.id);
+    assert(["pending", "completed", "failed"].includes(item.status), "Hay una evaluación con estado inválido.");
+    assert(VALIDATION_STATES.includes(item.validationState), "Hay una validación de nivel inválida.");
+    assert(item.percentage === null || (Number.isFinite(item.percentage) && item.percentage >= 0 && item.percentage <= 100), "Hay un porcentaje de evaluación inválido.");
+    assert(item.competencyIds.every((id) => competencyIds.has(id)), "Hay una evaluación con competencias inválidas.");
+  }
   return candidate;
 }
 
 export function normalizeState(candidate) {
   const state = structuredClone(candidate);
+  if (![1, SCHEMA_VERSION].includes(state.schemaVersion)) throw new Error(`Versión de datos no compatible (${state.schemaVersion ?? "desconocida"}).`);
+  state.schemaVersion = SCHEMA_VERSION;
   state.revision = Number.isInteger(state.revision) ? state.revision : 0;
   state.updatedAt = isIsoTimestamp(state.updatedAt) ? state.updatedAt : new Date().toISOString();
   const configuredDuration = Number.parseInt(state.settings.focusDurationSeconds, 10);
@@ -201,6 +276,9 @@ export function normalizeState(candidate) {
   state.settings.seededDemo = Boolean(state.settings.seededDemo);
   state.projects = state.projects.map((project) => {
     const status = project.status === "completed" ? "completed" : "active";
+    const defaults = defaultEvaluationConfig();
+    const config = project.evaluationConfig ?? {};
+    const rubric = config.rubric?.criteria?.length ? config.rubric : defaults.rubric;
     return {
       ...project,
       description: String(project.description ?? "").slice(0, 300),
@@ -208,6 +286,24 @@ export function normalizeState(candidate) {
       completedAt: status === "completed"
         ? (isIsoTimestamp(project.completedAt) ? project.completedAt : project.createdAt)
         : null,
+      projectType: PROJECT_TYPES.includes(project.projectType) ? project.projectType : "general",
+      evaluationConfig: {
+        ...defaults,
+        ...config,
+        privacy: PRIVACY_MODES.includes(config.privacy) ? config.privacy : defaults.privacy,
+        provider: AI_PROVIDERS.includes(config.provider) ? config.provider : defaults.provider,
+        profile: AI_PROFILES.includes(config.profile) ? config.profile : defaults.profile,
+        maxRequestsPerDay: Math.max(1, Math.min(100, Number.parseInt(config.maxRequestsPerDay, 10) || defaults.maxRequestsPerDay)),
+        geminiModel: String(config.geminiModel || defaults.geminiModel).slice(0, 100),
+        cloudflareModel: String(config.cloudflareModel || defaults.cloudflareModel).slice(0, 120),
+        rubric: {
+          id: String(rubric.id || DEFAULT_RUBRIC.id).slice(0, 128),
+          version: Math.max(1, Number.parseInt(rubric.version, 10) || 1),
+          name: String(rubric.name || DEFAULT_RUBRIC.name).slice(0, 120),
+          thresholds: Array.isArray(rubric.thresholds) && rubric.thresholds.length === 6 ? rubric.thresholds.map(Number) : [...DEFAULT_RUBRIC.thresholds],
+          criteria: rubric.criteria.map((item, index) => ({ id: String(item.id || `criterion-${index + 1}`).slice(0, 128), name: String(item.name || "Criterio").slice(0, 100), weight: Number(item.weight), descriptions: Array.isArray(item.descriptions) ? item.descriptions.slice(0, 5).map((value) => String(value).slice(0, 300)) : [] })),
+        },
+      },
     };
   });
   state.tasks = state.tasks.map((task) => {
@@ -244,6 +340,14 @@ export function normalizeState(candidate) {
   state.pendingCompletion = state.pendingCompletion
     ? { ...state.pendingCompletion, kind: ["session", "completion"].includes(state.pendingCompletion.kind) ? state.pendingCompletion.kind : "completion" }
     : null;
+  state.competencies = (Array.isArray(state.competencies) ? state.competencies : []).map((item) => ({ ...item, parentId: item.parentId || null, name: String(item.name || "").slice(0, 100), description: String(item.description || "").slice(0, 500), objectives: Array.isArray(item.objectives) ? item.objectives.map(String).slice(0, 20) : [], dependencies: Array.isArray(item.dependencies) ? item.dependencies.filter(Boolean) : [], resources: Array.isArray(item.resources) ? item.resources.slice(0, 30) : [] }));
+  state.exercises = (Array.isArray(state.exercises) ? state.exercises : []).map((item) => ({ ...item, title: String(item.title || "").slice(0, 120), description: String(item.description || "").slice(0, 1200), objective: String(item.objective || "").slice(0, 600), difficulty: Math.max(1, Math.min(5, Number.parseInt(item.difficulty, 10) || 1)), competencyIds: Array.isArray(item.competencyIds) ? [...new Set(item.competencyIds)] : [], code: String(item.code || "").slice(0, 30000), expectedResult: String(item.expectedResult || "").slice(0, 3000), actualResult: String(item.actualResult || "").slice(0, 3000), helpLevel: HELP_LEVELS.includes(item.helpLevel) ? item.helpLevel : "unverified_help", independenceDeclared: Boolean(item.independenceDeclared), independenceVerified: item.independenceVerified === true, status: ["draft", "completed", "verified"].includes(item.status) ? item.status : "draft", tests: item.tests && typeof item.tests === "object" ? item.tests : { status: "not_run", passed: 0, total: 0, summary: "" }, files: Array.isArray(item.files) ? item.files : [] }));
+  state.evidence = (Array.isArray(state.evidence) ? state.evidence : []).map((item) => ({ ...item, targetType: ["project", "exercise", "deliverable"].includes(item.targetType) ? item.targetType : "project", targetId: String(item.targetId || item.projectId), title: String(item.title || "").slice(0, 160), description: String(item.description || "").slice(0, 2000), kind: ["reported", "attached", "test_passed", "external_verified"].includes(item.kind) ? item.kind : "reported", competencyIds: Array.isArray(item.competencyIds) ? [...new Set(item.competencyIds)] : [] }));
+  state.evaluations = (Array.isArray(state.evaluations) ? state.evaluations : []).map((item) => ({ ...item, competencyIds: Array.isArray(item.competencyIds) ? [...new Set(item.competencyIds)] : [], scores: Array.isArray(item.scores) ? item.scores : [], percentage: Number.isFinite(item.percentage) ? Math.max(0, Math.min(100, item.percentage)) : null, validationState: VALIDATION_STATES.includes(item.validationState) ? item.validationState : "insufficient", strengths: Array.isArray(item.strengths) ? item.strengths.map(String) : [], weaknesses: Array.isArray(item.weaknesses) ? item.weaknesses.map(String) : [], recommendations: Array.isArray(item.recommendations) ? item.recommendations.map(String) : [] }));
+  state.deliveryStages = (Array.isArray(state.deliveryStages) ? state.deliveryStages : []).map((item, index) => ({ ...item, title: String(item.title || "").slice(0, 120), description: String(item.description || "").slice(0, 800), order: Number.isInteger(item.order) ? item.order : index }));
+  state.deliverables = (Array.isArray(state.deliverables) ? state.deliverables : []).map((item) => ({ ...item, title: String(item.title || "").slice(0, 160), description: String(item.description || "").slice(0, 1200), status: DELIVERABLE_STATUSES.includes(item.status) ? item.status : "pending", dependencyIds: Array.isArray(item.dependencyIds) ? [...new Set(item.dependencyIds)] : [], blockingReason: String(item.blockingReason || "").slice(0, 800), weight: Number.isFinite(item.weight) && item.weight > 0 ? item.weight : null, dueDate: item.dueDate || null, verifiedAt: item.status === "verified" && isIsoTimestamp(item.verifiedAt) ? item.verifiedAt : null }));
+  state.aiRequests = Array.isArray(state.aiRequests) ? state.aiRequests : [];
+  state.weeklyReviews = Array.isArray(state.weeklyReviews) ? state.weeklyReviews : [];
   validateState(state);
   return state;
 }
@@ -275,8 +379,8 @@ export function createExportEnvelope(state, now = new Date()) {
 
 export function assertBackupEnvelope(envelope) {
   assert(envelope?.app === "StudyHub", "Este archivo no es una copia de StudyHub.");
-  assert(envelope.schemaVersion === SCHEMA_VERSION, "La versión de la copia no es compatible.");
-  return validateState(envelope.data);
+  assert([1, SCHEMA_VERSION].includes(envelope.schemaVersion), "La versión de la copia no es compatible.");
+  return validateState(normalizeState(envelope.data));
 }
 
 export function demoDueDateLabel() {

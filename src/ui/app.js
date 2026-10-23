@@ -4,6 +4,7 @@ import { StudyHubRepository } from "../data/repository.js";
 import { mountAuthGate } from "../cloud/authGate.js";
 import { StudyHubAuth, createStudyHubSupabaseClient, readSupabaseConfig } from "../cloud/supabase.js";
 import { TaskFileStore } from "../cloud/taskFiles.js";
+import { AiEvaluationClient } from "../cloud/aiEvaluation.js";
 import { createRouter } from "../router.js";
 import { createStore } from "../state/store.js";
 import { TimerController } from "../timer/timerController.js";
@@ -15,6 +16,8 @@ import { focusView } from "../views/focusView.js";
 import { completedProjectsView } from "../views/completedProjectsView.js";
 import { projectView } from "../views/projectView.js";
 import { projectsView } from "../views/projectsView.js";
+import { progressView } from "../views/progressView.js";
+import { createEvaluationReport, reportToMarkdown, validateExternalEvaluationReport } from "../evaluation/report.js";
 import { registerStudyHubTools } from "../webmcp.js";
 import { brand, confirmDialog, globalTasksPanel, learningEntryDialog, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
 import { icon } from "./icons.js";
@@ -25,6 +28,21 @@ const LAYOUT_STORAGE_PREFIX = "studyhub:layout:1";
 function defaultSidebarLayout() {
   const compactScreen = globalThis.matchMedia?.("(max-width: 1500px)").matches ?? false;
   return { leftSidebarOpen: !compactScreen, rightSidebarOpen: !compactScreen, projectTaskTab: "open", completedTaskFilterByProject: {} };
+}
+
+function reportRangeFrom(target) {
+  const page = target.closest?.(".progress-page");
+  const period = page?.querySelector?.("[data-evaluation-period]")?.value || "all";
+  const now = new Date();
+  const today = toLocalDateKey(now);
+  if (period === "all") return {};
+  if (period === "today") return { from: today, to: today };
+  if (period === "custom") return { from: page?.querySelector?.("[data-evaluation-from]")?.value || null, to: page?.querySelector?.("[data-evaluation-to]")?.value || null };
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (period === "seven") from.setDate(from.getDate() - 6);
+  if (period === "week") from.setDate(from.getDate() - ((from.getDay() + 6) % 7));
+  if (period === "month") from.setDate(1);
+  return { from: toLocalDateKey(from), to: today };
 }
 
 function readSidebarLayout(storage, key) {
@@ -128,6 +146,7 @@ export class StudyHubApp {
     this.account = context.account ?? null;
     this.auth = context.auth ?? null;
     this.fileStore = context.fileStore ?? null;
+    this.aiEvaluator = context.aiEvaluator ?? null;
     this.adapter = context.adapter ?? repository.adapter;
     this.migrationCandidate = context.migrationCandidate ?? null;
     this.learningDraftStore = new LearningDraftStore(context.draftStorage ?? globalThis.localStorage, this.account?.id ?? "local");
@@ -372,7 +391,7 @@ export class StudyHubApp {
       queueMicrotask(() => this.router.navigate("projects"));
       return { route: { name: "projects" }, project: null, task: null };
     }
-    if (route.name === "project") return { route, project, task: null };
+    if (["project", "progress"].includes(route.name)) return { route, project, task: null };
     const task = state.tasks.find((item) => item.id === route.taskId && item.projectId === project.id);
     if (!task) {
       queueMicrotask(() => this.router.navigate(`projects/${project.id}`));
@@ -396,6 +415,7 @@ export class StudyHubApp {
     let content = projectsView(state, this.ui);
     if (route.name === "completedProjects") content = completedProjectsView(state, this.ui);
     if (route.name === "project" && project) content = projectView(state, project, this.ui);
+    if (route.name === "progress" && project) content = progressView(state, project, this.ui, { aiEnabled: Boolean(this.aiEvaluator) });
     if (route.name === "focus" && project && task) content = focusView(state, project, task, this.ui);
     const storedProject = this.ui.dialog?.type === "project" ? state.projects.find((item) => item.id === this.ui.dialog.id) : null;
     const storedTask = this.ui.dialog?.type === "task" ? state.tasks.find((item) => item.id === this.ui.dialog.id) : null;
@@ -503,6 +523,12 @@ export class StudyHubApp {
       }
       case "toggle-project-menu": this.ui.menu = this.ui.menu?.type === "project" && this.ui.menu.projectId === target.dataset.projectId ? null : { type: "project", projectId: target.dataset.projectId }; this.render(); break;
       case "new-task": this.ui.dialog = { type: "task", projectId: target.dataset.projectId || route.projectId }; this.render(); break;
+      case "recommendation-to-task": {
+        const recommendation = String(target.dataset.recommendation || "");
+        this.ui.dialog = { type: "task", projectId: target.dataset.projectId || route.projectId, draft: { title: recommendation.slice(0, 100), description: `Recomendación originada en una evaluación:\n${recommendation}`, status: "pending" } };
+        this.render();
+        break;
+      }
       case "edit-task": {
         const task = state.tasks.find((item) => item.id === target.dataset.taskId);
         this.ui.dialog = { type: "task", id: task?.id, projectId: task?.projectId }; this.ui.menu = null; this.render(); break;
@@ -712,11 +738,52 @@ export class StudyHubApp {
         this.router.navigate(`projects/${task.projectId}/tasks/${task.id}`);
         break;
       }
+      case "evaluate-exercise": await this.safely(async () => {
+        if (!this.aiEvaluator) throw new Error("La evaluación con IA necesita una cuenta cloud configurada.");
+        const exercise = state.exercises.find((item) => item.id === target.dataset.exerciseId);
+        const project = state.projects.find((item) => item.id === exercise?.projectId);
+        if (!exercise || !project) throw new Error("El ejercicio ya no existe.");
+        const today = new Date().toISOString().slice(0, 10);
+        const usedToday = state.aiRequests.filter((item) => item.projectId === project.id && String(item.createdAt).startsWith(today)).length;
+        if (usedToday >= project.evaluationConfig.maxRequestsPerDay) throw new Error("Alcanzaste el límite diario configurado para este proyecto.");
+        const provider = target.dataset.provider || project.evaluationConfig.provider;
+        if (provider === "both") this.addToast("Se enviará la misma evidencia a Gemini y Cloudflare. Se consumirán recursos de ambos proveedores.");
+        const started = Date.now();
+        try {
+          const response = await this.aiEvaluator.evaluate({ project, exercise, competencies: state.competencies.filter((item) => exercise.competencyIds.includes(item.id)), provider, profile: project.evaluationConfig.profile });
+          await this.repository.storeAiEvaluation(exercise.id, response);
+          for (const failure of response.errors ?? []) await this.repository.recordAiFailure(project.id, { provider: failure.provider, profile: project.evaluationConfig.profile, error: failure.message });
+          this.addToast(response.status === "partial" ? "Se guardó la evaluación disponible; el otro proveedor falló y quedó registrado." : provider === "both" ? "Las dos evaluaciones se guardaron por separado." : "Evaluación de IA guardada.");
+        } catch (error) {
+          await this.repository.recordAiFailure(project.id, { provider, model: provider === "cloudflare" ? project.evaluationConfig.cloudflareModel : project.evaluationConfig.geminiModel, profile: project.evaluationConfig.profile, latencyMs: Date.now() - started, error: error?.message });
+          throw error;
+        }
+      }); break;
+      case "check-ai-providers": await this.safely(async () => {
+        if (!this.aiEvaluator) throw new Error("La Edge Function de evaluación no está disponible en modo local.");
+        const result = await this.aiEvaluator.check("both");
+        const connectionLabel = (item, name) => !item?.configured ? `${name} no configurado` : item.connection === "success" ? `${name} conectado` : item.connection === "permission_error" ? `${name}: error de permisos` : item.connection === "model_unavailable" ? `${name}: modelo no disponible` : item.connection === "quota_exhausted" ? `${name}: cuota agotada` : `${name}: error de conexión`;
+        const gemini = connectionLabel(result.providers?.gemini, "Gemini");
+        const cloudflare = connectionLabel(result.providers?.cloudflare, "Cloudflare");
+        this.addToast(`${gemini} · ${cloudflare}`);
+      }); break;
+      case "export-evaluation": {
+        const report = createEvaluationReport(state, target.dataset.projectId, reportRangeFrom(target));
+        const markdown = target.dataset.format === "md";
+        this.downloadText(markdown ? reportToMarkdown(report) : JSON.stringify(report, null, 2), `studyhub-evaluacion-${target.dataset.projectId}.${markdown ? "md" : "json"}`, markdown ? "text/markdown" : "application/json");
+        this.addToast("Informe de evaluación exportado.");
+        break;
+      }
+      case "copy-evaluation": await this.safely(async () => {
+        const report = createEvaluationReport(state, target.dataset.projectId, reportRangeFrom(target));
+        await globalThis.navigator.clipboard.writeText(reportToMarkdown(report));
+        this.addToast("Informe copiado al portapapeles.");
+      }); break;
       case "toggle-theme": this.ui.dimTheme = !this.ui.dimTheme; this.render(); break;
       case "export-backup": this.exportBackup(); this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
       case "import-backup": this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.root.querySelector("#backup-file")?.click(); break;
       case "reset-data": this.ui.confirm = { type: "reset", title: "¿Empezar desde cero?", message: this.account ? "Se eliminarán todos los proyectos, tareas, sesiones, reflexiones y archivos adjuntos de esta cuenta. La limpieza de archivos se completará al sincronizar." : "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de este dispositivo.", confirmLabel: "Limpiar datos" }; this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
-      case "cancel-confirm": this.ui.confirm = null; this.ui.pendingImport = null; this.render(); break;
+      case "cancel-confirm": this.ui.confirm = null; this.ui.pendingImport = null; this.ui.pendingEvaluationImport = null; this.render(); break;
       case "confirm-action": await this.confirmAction(); break;
       case "dismiss-toast": this.ui.toasts = this.ui.toasts.filter((toast) => toast.id !== target.dataset.toastId); this.renderToasts(); break;
       default: break;
@@ -728,6 +795,17 @@ export class StudyHubApp {
     this.ui.calendar = { year: date.getFullYear(), month: date.getMonth() };
     this.ui.selectedDate = null;
     this.render();
+  }
+
+  downloadText(content, filename, type) {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    globalThis.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   async confirmAction() {
@@ -755,6 +833,10 @@ export class StudyHubApp {
         await this.repository.deleteLearningEntry(current.id);
         if (this.ui.dialog?.type === "learning-entry" && this.ui.dialog.id === current.id) this.ui.dialog = null;
         this.addToast("Aprendizaje eliminado. La sesión y su tiempo se conservaron.");
+      } else if (current.type === "import-evaluations") {
+        const result = await this.repository.importExternalEvaluations(current.id, this.ui.pendingEvaluationImport);
+        this.ui.pendingEvaluationImport = null;
+        this.addToast(`${result.imported} ${result.imported === 1 ? "evaluación importada" : "evaluaciones importadas"}.`);
       } else if (current.type === "reset") {
         const taskIds = this.repository.getState().tasks.map((task) => task.id);
         await this.repository.resetAll();
@@ -920,6 +1002,19 @@ export class StudyHubApp {
       event.target.value = "";
       return;
     }
+    if (event.target.dataset.input === "evaluation-import") {
+      const [file] = event.target.files ?? [];
+      event.target.value = "";
+      if (!file) return;
+      try {
+        const report = validateExternalEvaluationReport(JSON.parse(await file.text()));
+        if (report.project.id !== event.target.dataset.projectId) throw new Error("El informe pertenece a otro proyecto.");
+        this.ui.pendingEvaluationImport = report;
+        this.ui.confirm = { type: "import-evaluations", id: event.target.dataset.projectId, title: "¿Importar evaluaciones externas?", message: `Se encontraron ${report.evaluations.length} evaluaciones. Se conservará su procedencia y no se sobrescribirá el historial existente.`, confirmLabel: "Importar evaluaciones" };
+        this.render();
+      } catch (error) { this.addToast(error?.message || "El informe no es válido.", "error"); }
+      return;
+    }
     if (event.target.dataset.input === "backup-file") {
       const [file] = event.target.files;
       if (!file) return;
@@ -962,6 +1057,51 @@ export class StudyHubApp {
         this.render();
         this.addToast(form.dataset.projectId ? "Proyecto actualizado." : "Proyecto creado.");
       }
+    }
+    if (form.dataset.form === "evaluation-settings") {
+      const success = await this.safely(async () => this.repository.updateEvaluationSettings(form.dataset.projectId, data));
+      if (success) this.addToast("Configuración de evaluación guardada.");
+    }
+    if (form.dataset.form === "rubric-settings") {
+      const project = this.repository.getState().projects.find((item) => item.id === form.dataset.projectId);
+      const criteria = project?.evaluationConfig.rubric.criteria.map((criterion) => ({ ...criterion, weight: Number(data[`weight_${criterion.id}`]) })) ?? [];
+      const success = await this.safely(async () => this.repository.updateRubric(form.dataset.projectId, criteria));
+      if (success) this.addToast("Pesos de la rúbrica guardados.");
+    }
+    if (form.dataset.form === "competency") {
+      const success = await this.safely(async () => this.repository.createCompetency(form.dataset.projectId, data));
+      if (success) { form.reset(); this.addToast("Competencia añadida."); }
+    }
+    if (form.dataset.form === "exercise") {
+      data.competencyIds = new FormData(form).getAll("competencyIds");
+      data.independenceDeclared = form.elements.independenceDeclared?.checked ?? false;
+      const success = await this.safely(async () => this.repository.createExercise(form.dataset.projectId, data));
+      if (success) { form.reset(); this.addToast("Ejercicio registrado."); }
+    }
+    if (form.dataset.form === "manual-evaluation") {
+      const success = await this.safely(async () => this.repository.recordManualEvaluation(form.dataset.exerciseId, data));
+      if (success) { form.reset(); this.addToast("Evaluación manual guardada."); }
+    }
+    if (form.dataset.form === "evidence") {
+      const [targetType, targetId] = String(data.target || "").split(":");
+      data.targetType = targetType;
+      data.targetId = targetId;
+      data.competencyIds = new FormData(form).getAll("competencyIds");
+      const success = await this.safely(async () => this.repository.createEvidence(form.dataset.projectId, data));
+      if (success) { form.reset(); this.addToast("Evidencia añadida."); }
+    }
+    if (form.dataset.form === "delivery-stage") {
+      const success = await this.safely(async () => this.repository.createDeliveryStage(form.dataset.projectId, data));
+      if (success) { form.reset(); this.addToast("Etapa añadida."); }
+    }
+    if (form.dataset.form === "deliverable") {
+      data.dependencyIds = new FormData(form).getAll("dependencyIds");
+      const success = await this.safely(async () => this.repository.createDeliverable(form.dataset.projectId, data));
+      if (success) { form.reset(); this.addToast("Entregable guardado."); }
+    }
+    if (form.dataset.form === "deliverable-status") {
+      const success = await this.safely(async () => this.repository.updateDeliverableStatus(form.dataset.deliverableId, data.status, data.blockingReason));
+      if (success) this.addToast("Estado del entregable actualizado.");
     }
     if (form.dataset.form === "task") {
       this.ui.dialog = { ...this.ui.dialog, draft: data };
@@ -1069,7 +1209,7 @@ export class StudyHubApp {
   }
 }
 
-async function mountStudyHub(root, { adapter, account = null, auth = null, fileStore = null }) {
+async function mountStudyHub(root, { adapter, account = null, auth = null, fileStore = null, aiEvaluator = null }) {
   const store = createStore(null);
   const repository = new StudyHubRepository({ adapter, store });
   const init = await repository.initialize();
@@ -1078,6 +1218,7 @@ async function mountStudyHub(root, { adapter, account = null, auth = null, fileS
     account,
     auth,
     fileStore,
+    aiEvaluator,
     adapter,
     migrationCandidate: init.migrationCandidate ?? null,
   });
@@ -1110,6 +1251,7 @@ export async function createApp(root, dependencies = {}) {
       fileStore: dependencies.fileStoreFactory
         ? dependencies.fileStoreFactory({ client, userId })
         : new TaskFileStore(client, userId),
+      aiEvaluator: dependencies.aiEvaluator ?? new AiEvaluationClient(client),
     });
   };
 
