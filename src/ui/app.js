@@ -18,8 +18,9 @@ import { projectView } from "../views/projectView.js";
 import { projectsView } from "../views/projectsView.js";
 import { progressView } from "../views/progressView.js";
 import { createEvaluationReport, reportToMarkdown, validateExternalEvaluationReport } from "../evaluation/report.js";
+import { prepareLearningPathImport } from "../evaluation/learningPathImport.js";
 import { registerStudyHubTools } from "../webmcp.js";
-import { brand, confirmDialog, globalTasksPanel, learningEntryDialog, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
+import { brand, confirmDialog, globalTasksPanel, learningEntryDialog, learningPathImportDialog, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
 import { icon } from "./icons.js";
 import { LearningDraftStore, normalizeLearningDraft } from "./learningDrafts.js";
 
@@ -76,6 +77,7 @@ function initialUiState(learningDrafts = {}, sidebarLayout = defaultSidebarLayou
     dialog: null,
     confirm: null,
     pendingImport: null,
+    pendingLearningPathImport: null,
     focusLearningTab: "draft",
     learningDrafts,
     taskFiles: null,
@@ -99,7 +101,7 @@ function sidebarProfile(state, ui, account) {
 
 function shellSidebar(state, route, ui, account) {
   if (["projects", "completedProjects"].includes(route.name)) {
-    return `<aside class="sidebar dashboard-sidebar" id="left-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="${route.name === "projects" ? "active" : ""}" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><a class="${route.name === "completedProjects" ? "active" : ""}" href="#/completed" aria-label="Proyectos completados">${icon("archive")}<span>Proyectos completados</span></a><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" data-settings-anchor="topbar" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote>${sidebarProfile(state, ui, account)}</aside>`;
+    return `<aside class="sidebar dashboard-sidebar" id="left-sidebar">${brand()}<nav class="main-nav" aria-label="Navegación principal"><a class="${route.name === "projects" ? "active" : ""}" href="#/projects" aria-label="Proyectos">${icon("grid")}<span>Proyectos</span></a><a class="${route.name === "completedProjects" ? "active" : ""}" href="#/completed" aria-label="Proyectos completados">${icon("archive")}<span>Proyectos completados</span></a><button type="button" data-action="import-learning-path" aria-label="Importar ruta educativa">${icon("book")}<span>Importar ruta</span></button><button type="button" data-action="export-backup" aria-label="Exportar copia">${icon("download")}<span>Exportar copia</span></button><button type="button" data-action="import-backup" aria-label="Importar copia">${icon("upload")}<span>Importar copia</span></button><button type="button" data-action="open-settings" data-settings-anchor="topbar" aria-label="Ajustes">${icon("settings")}<span>Ajustes</span></button></nav><blockquote>“Disciplina hoy,<br />resultados mañana.”</blockquote>${sidebarProfile(state, ui, account)}</aside>`;
   }
   const projectQuery = normalizeForSearch(ui.projectSearch);
   const filtered = state.projects.filter((project) => (project.status !== "completed" || project.id === route.projectId) && normalizeForSearch(`${project.name} ${project.description}`).includes(projectQuery));
@@ -119,7 +121,7 @@ function settingsMenu(state, account, syncStatus) {
   const cloudProfile = account
     ? `<div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>${escapeHtml(account.email || "Cuenta StudyHub")}</small><small class="sync-state sync-${escapeHtml(syncStatus.state)}" data-sync-state>${escapeHtml(syncStatus.message)}</small></div></div>`
     : `<div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>Modo local</small></div></div>`;
-  return `<div class="floating-menu settings-menu" role="menu">${cloudProfile}${account && (syncStatus.pending || syncStatus.state === "error") ? `<button type="button" role="menuitem" data-action="sync-now">${icon("upload", 18)} Sincronizar ahora</button>` : ""}<button type="button" role="menuitem" data-action="export-backup">${icon("download", 18)} Exportar copia JSON</button><button type="button" role="menuitem" data-action="import-backup">${icon("upload", 18)} Importar copia JSON</button><button type="button" role="menuitem" class="danger-text" data-action="reset-data">${icon("trash", 18)} Limpiar todos los datos</button>${account ? `<button type="button" role="menuitem" data-action="sign-out">${icon("logOut", 18)} Cerrar sesión</button>` : ""}</div>`;
+  return `<div class="floating-menu settings-menu" role="menu">${cloudProfile}${account && (syncStatus.pending || syncStatus.state === "error") ? `<button type="button" role="menuitem" data-action="sync-now">${icon("upload", 18)} Sincronizar ahora</button>` : ""}<button type="button" role="menuitem" data-action="import-learning-path">${icon("book", 18)} Importar ruta educativa</button><button type="button" role="menuitem" data-action="export-backup">${icon("download", 18)} Exportar copia JSON</button><button type="button" role="menuitem" data-action="import-backup">${icon("upload", 18)} Importar copia JSON</button><button type="button" role="menuitem" class="danger-text" data-action="reset-data">${icon("trash", 18)} Limpiar todos los datos</button>${account ? `<button type="button" role="menuitem" data-action="sign-out">${icon("logOut", 18)} Cerrar sesión</button>` : ""}</div>`;
 }
 
 function shellTopbar(state, route, ui, account) {
@@ -433,14 +435,14 @@ export class StudyHubApp {
     const activeTaskTitle = pendingTask ? pausedOtherTaskName(state, pendingTask.id) : null;
     const leftOpen = this.ui.leftSidebarOpen;
     const rightOpen = this.ui.rightSidebarOpen;
-    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""} ${leftOpen ? "is-left-open" : "is-left-collapsed"} ${rightOpen ? "is-right-open" : "is-right-collapsed"}"><div class="sidebar-shell left-sidebar-shell ${leftOpen ? "is-open" : "is-collapsed"}">${shellSidebar(state, route, this.ui, this.account)}${sidebarRail("left", leftOpen)}</div><main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main><div class="sidebar-shell right-sidebar-shell ${rightOpen ? "is-open" : "is-collapsed"}">${sidebarRail("right", rightOpen)}${globalTasksPanel(state)}</div></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask, { filesEnabled: this.ui.filesEnabled, selectedFiles: this.ui.dialog.files ?? [] }) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""} ${leftOpen ? "is-left-open" : "is-left-collapsed"} ${rightOpen ? "is-right-open" : "is-right-collapsed"}"><div class="sidebar-shell left-sidebar-shell ${leftOpen ? "is-open" : "is-collapsed"}">${shellSidebar(state, route, this.ui, this.account)}${sidebarRail("left", leftOpen)}</div><main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main><div class="sidebar-shell right-sidebar-shell ${rightOpen ? "is-open" : "is-collapsed"}">${sidebarRail("right", rightOpen)}${globalTasksPanel(state)}</div></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" /><input class="sr-only" type="file" id="learning-path-file" accept="application/json,.json" data-input="learning-path-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask, { filesEnabled: this.ui.filesEnabled, selectedFiles: this.ui.dialog.files ?? [] }) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.pendingLearningPathImport ? learningPathImportDialog(this.ui.pendingLearningPathImport) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
     if (editingLearningEntry) this.root.insertAdjacentHTML("beforeend", learningEntryDialog(editingLearningEntry, editingLearningTask));
     this.openPendingDialog();
     this.timer.renderNow();
   }
 
   openPendingDialog() {
-    const selector = this.migrationCandidate ? "#migration-dialog" : this.ui.confirm ? "#confirm-dialog" : this.repository.getState().pendingCompletion ? "#reflection-dialog" : this.ui.dialog?.type === "project" ? "#project-dialog" : this.ui.dialog?.type === "task" ? "#task-dialog" : this.ui.dialog?.type === "learning-entry" ? "#learning-entry-dialog" : null;
+    const selector = this.migrationCandidate ? "#migration-dialog" : this.ui.pendingLearningPathImport ? "#route-import-dialog" : this.ui.confirm ? "#confirm-dialog" : this.repository.getState().pendingCompletion ? "#reflection-dialog" : this.ui.dialog?.type === "project" ? "#project-dialog" : this.ui.dialog?.type === "task" ? "#task-dialog" : this.ui.dialog?.type === "learning-entry" ? "#learning-entry-dialog" : null;
     if (!selector) return;
     requestAnimationFrame(() => {
       const dialog = this.root.querySelector(selector);
@@ -782,6 +784,16 @@ export class StudyHubApp {
       case "toggle-theme": this.ui.dimTheme = !this.ui.dimTheme; this.render(); break;
       case "export-backup": this.exportBackup(); this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
       case "import-backup": this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.root.querySelector("#backup-file")?.click(); break;
+      case "import-learning-path": this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.root.querySelector("#learning-path-file")?.click(); break;
+      case "cancel-learning-path-import": this.ui.pendingLearningPathImport = null; this.render(); break;
+      case "confirm-learning-path-import": await this.safely(async () => {
+        const preview = this.ui.pendingLearningPathImport;
+        if (!preview) throw new Error("La vista previa de la ruta ya no está disponible.");
+        const project = await this.repository.importLearningPath(preview);
+        this.ui.pendingLearningPathImport = null;
+        this.router.navigate(`projects/${project.id}/progress`);
+        this.addToast("Ruta educativa importada. Todas las competencias comienzan sin evaluar.");
+      }); break;
       case "reset-data": this.ui.confirm = { type: "reset", title: "¿Empezar desde cero?", message: this.account ? "Se eliminarán todos los proyectos, tareas, sesiones, reflexiones y archivos adjuntos de esta cuenta. La limpieza de archivos se completará al sincronizar." : "Se eliminarán todos los proyectos, tareas, sesiones y reflexiones de este dispositivo.", confirmLabel: "Limpiar datos" }; this.ui.settingsOpen = false; this.ui.settingsAnchor = null; this.render(); break;
       case "cancel-confirm": this.ui.confirm = null; this.ui.pendingImport = null; this.ui.pendingEvaluationImport = null; this.render(); break;
       case "confirm-action": await this.confirmAction(); break;
@@ -1015,6 +1027,16 @@ export class StudyHubApp {
       } catch (error) { this.addToast(error?.message || "El informe no es válido.", "error"); }
       return;
     }
+    if (event.target.dataset.input === "learning-path-file") {
+      const [file] = event.target.files ?? [];
+      event.target.value = "";
+      if (!file) return;
+      try {
+        this.ui.pendingLearningPathImport = prepareLearningPathImport(JSON.parse(await file.text()), file.name);
+        this.render();
+      } catch (error) { this.addToast(error?.message || "La ruta educativa no es válida.", "error"); }
+      return;
+    }
     if (event.target.dataset.input === "backup-file") {
       const [file] = event.target.files;
       if (!file) return;
@@ -1201,6 +1223,11 @@ export class StudyHubApp {
           ? `La tarea sigue abierta. La sesión de “${pausedTask}” sigue pausada y puedes reanudarla.`
           : reflectionKind === "session" ? "Reflexión omitida; la sesión y su tiempo quedaron guardados." : "La tarea sigue abierta; el tiempo ya quedó guardado.");
       });
+      return;
+    }
+    if (event.target.id === "route-import-dialog") {
+      this.ui.pendingLearningPathImport = null;
+      this.render();
       return;
     }
     if (event.target.id === "confirm-dialog") { this.ui.confirm = null; this.ui.pendingImport = null; }

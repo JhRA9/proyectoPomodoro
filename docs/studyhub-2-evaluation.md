@@ -45,3 +45,18 @@ Nunca uses código corporativo o confidencial sin autorización. Los informes pe
 ## Estado de las conexiones
 
 Las integraciones están implementadas y probadas con adaptadores simulados. No se ha ejecutado una solicitud real en este cambio porque no hay credenciales disponibles en el entorno local y no se ha desplegado la Edge Function. Por tanto, Gemini y Cloudflare deben considerarse **no verificados en vivo** hasta completar el paso 6 anterior.
+
+## Importar rutas educativas
+
+**Importar ruta educativa** es independiente de **Importar copia JSON**. Crea un proyecto nuevo de Estudios y nunca reemplaza proyectos existentes. El importador acepta una raíz `route`, `ruta` o el propio documento, y reconoce nombres equivalentes en español e inglés para:
+
+- `competencias` / `competencies`;
+- `clases` / `classes` y `lecciones` / `lessons`;
+- `tareas` / `tasks` y `actividades` / `activities`;
+- `ejercicios` / `exercises`;
+- `evaluacionesPrevistas` / `plannedEvaluations`;
+- `enlaces`, `dependencias` y fechas límite.
+
+Antes de importar muestra cantidades y advertencias. Un fingerprint canónico impide importar dos veces el mismo documento. Los identificadores externos se usan únicamente para reconstruir relaciones y dependencias.
+
+Los campos externos como `completed`, `progreso`, `porcentaje`, `certificado`, `score` o `calificación` se ignoran. No se crea ninguna evaluación ni puntuación. Todas las competencias importadas comienzan como **Sin evaluar** y solo cambian mediante diagnósticos, ejercicios y evidencias propios guardados en StudyHub.

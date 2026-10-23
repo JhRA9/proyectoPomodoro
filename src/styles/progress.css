@@ -4,6 +4,8 @@
 .progress-page { width: min(1390px,100%); margin: 0 auto; padding: 18px clamp(24px,4vw,54px) 60px; }
 .progress-page > .project-section-tabs,.project-page > .project-section-tabs { width: 100%; }
 .progress-page > .project-heading { padding: 0; }
+.route-origin-notice { margin: 14px 0 0; padding: 12px 14px; color: #bdd8ff; border: 1px solid rgba(62,132,225,.35); border-radius: 11px; background: rgba(32,91,171,.12); }
+.route-origin-notice p { margin: 4px 0 0; color: var(--muted); font-size: .76rem; line-height: 1.5; }
 .progress-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin: 22px 0 16px; }
 .progress-toolbar h2 { margin: 0; font-size: 1.65rem; }
 .progress-toolbar p { margin: 5px 0 0; color: var(--muted); }
@@ -70,5 +72,11 @@
 .evidence-list article p { margin: 4px 0 0; color: var(--muted); font-size: .74rem; white-space: pre-wrap; }
 .evidence-list article > span { flex: 0 0 auto; padding: 4px 8px; color: #9dc8ff; border: 1px solid rgba(58,129,222,.3); border-radius: 999px; font-size: .66rem; }
 .evaluation-import { cursor: pointer; }
+.route-import-dialog { width: min(680px, calc(100vw - 32px)); }
+.route-import-counts { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; margin: 16px 0; }
+.route-import-counts span { display: grid; gap: 2px; padding: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; background: rgba(8,23,39,.55); font-size: .75rem; }
+.route-import-counts strong { color: var(--text); font-size: 1.15rem; }
+.route-import-warning { padding: 13px; color: #ffd99b; border: 1px solid rgba(240,182,92,.35); border-radius: 10px; background: rgba(112,72,16,.16); }
+.route-import-warning p { margin: 6px 0 0; font-size: .75rem; line-height: 1.45; }
 @media(max-width:1100px){.progress-settings form,.progress-settings form.rubric-settings{grid-template-columns:repeat(2,1fr)}.progress-metrics{grid-template-columns:repeat(2,1fr)}.progress-grid{grid-template-columns:1fr}.deliverable-item{grid-template-columns:1fr 1fr}.deliverable-item>div{grid-column:1/-1}}
-@media(max-width:650px){.progress-page{padding:14px 16px 40px}.project-section-tabs{width:calc(100% - 32px)}.progress-toolbar{align-items:stretch;flex-direction:column}.progress-toolbar>div:last-child{justify-content:flex-start}.progress-settings form,.progress-metrics,.inline-create-form,.exercise-form,.rubric-score-grid,.three-fields{grid-template-columns:1fr}.deliverable-item{grid-template-columns:1fr}.competency-item{grid-template-columns:1fr}.competency-score{justify-items:start}.competency-item.is-child{margin-left:12px}}
+@media(max-width:650px){.progress-page{padding:14px 16px 40px}.project-section-tabs{width:calc(100% - 32px)}.progress-toolbar{align-items:stretch;flex-direction:column}.progress-toolbar>div:last-child{justify-content:flex-start}.progress-settings form,.progress-metrics,.inline-create-form,.exercise-form,.rubric-score-grid,.three-fields,.route-import-counts{grid-template-columns:1fr}.deliverable-item{grid-template-columns:1fr}.competency-item{grid-template-columns:1fr}.competency-score{justify-items:start}.competency-item.is-child{margin-left:12px}}

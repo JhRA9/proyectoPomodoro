@@ -121,6 +121,53 @@ export class StudyHubRepository {
     return project;
   }
 
+  async importLearningPath(plan) {
+    if (!plan?.fingerprint || !plan?.title) throw new Error("La vista previa de la ruta no es válida.");
+    const now = this.clock().toISOString();
+    let importedProject;
+    await this.commit((state) => {
+      if (state.projects.some((item) => item.educationRouteImport?.fingerprint === plan.fingerprint)) throw new Error("Esta ruta educativa ya fue importada.");
+      const projectId = createId("project");
+      const competencyMap = new Map();
+      const taskMap = new Map();
+      const exerciseMap = new Map();
+      importedProject = {
+        id: projectId, name: cleanText(plan.title, 80), description: cleanText(plan.description || "Ruta educativa importada", 300),
+        icon: "graduation", color: "#7657ff", createdAt: now, status: "active", completedAt: null,
+        projectType: "studies", evaluationConfig: defaultEvaluationConfig(),
+        educationRouteImport: { fingerprint: plan.fingerprint, sourceName: cleanText(plan.sourceName, 240), importedAt: now, counts: structuredClone(plan.counts) },
+      };
+      state.projects.unshift(importedProject);
+      for (const source of plan.competencies) competencyMap.set(source.sourceId, createId("competency"));
+      for (const source of plan.competencies) state.competencies.push({
+        id: competencyMap.get(source.sourceId), projectId, parentId: null, name: cleanText(source.name, 100), description: cleanMultilineText(source.description, 500),
+        objectives: source.objectives.map((value) => cleanText(value, 500)).filter(Boolean).slice(0, 20),
+        dependencies: source.dependencyIds.map((id) => competencyMap.get(id)).filter(Boolean), resources: source.links.slice(0, 30),
+        sourceExternalId: source.sourceId, createdAt: now,
+      });
+      const importedTasks = [...plan.classes.map((item) => ({ ...item, routeKind: "class", category: "Clase" })), ...plan.tasks.map((item) => ({ ...item, routeKind: "task", category: "Ruta educativa" }))];
+      for (const source of importedTasks) taskMap.set(source.sourceId, createId("task"));
+      for (const source of importedTasks) state.tasks.push({
+        id: taskMap.get(source.sourceId), projectId, title: cleanText(source.title, 100),
+        description: cleanMultilineText([source.description, ...source.links.map((item) => `${item.label || "Enlace"}: ${item.url}`)].filter(Boolean).join("\n"), 500),
+        category: source.category, status: "pending", dueDate: source.dueDate, dueTime: null, accumulatedSeconds: 0, createdAt: now, completedAt: null, recurrence: null,
+        routeKind: source.routeKind, sourceExternalId: source.sourceId, sourceUrl: source.links[0]?.url || null,
+        competencyIds: source.competencyIds.map((id) => competencyMap.get(id)).filter(Boolean), dependencyIds: source.dependencyIds.map((id) => taskMap.get(id)).filter(Boolean),
+      });
+      const plannedExercises = [...plan.exercises.map((item) => ({ ...item, plannedEvaluation: false })), ...plan.plannedEvaluations.map((item) => ({ ...item, plannedEvaluation: true }))];
+      for (const source of plannedExercises) exerciseMap.set(source.sourceId, createId("exercise"));
+      for (const source of plannedExercises) state.exercises.push({
+        id: exerciseMap.get(source.sourceId), projectId, taskId: null, title: cleanText(source.title, 120), description: cleanMultilineText(source.description, 1200), objective: "",
+        difficulty: source.difficulty, competencyIds: source.competencyIds.map((id) => competencyMap.get(id)).filter(Boolean),
+        code: "", expectedResult: "", actualResult: "", helpLevel: "unverified_help", independenceDeclared: false, independenceVerified: false,
+        status: "draft", tests: { status: "not_run", passed: 0, total: 0, summary: "" }, files: [], resources: source.links, dependencyIds: source.dependencyIds.map((id) => exerciseMap.get(id)).filter(Boolean),
+        sourceExternalId: source.sourceId, plannedEvaluation: source.plannedEvaluation, dueDate: source.dueDate, createdAt: now, updatedAt: now,
+      });
+      state.settings.seededDemo = false;
+    });
+    return importedProject;
+  }
+
   async updateProject(projectId, input) {
     return this.commit((state) => {
       const project = state.projects.find((item) => item.id === projectId);
