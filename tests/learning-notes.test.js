@@ -3,7 +3,7 @@ import { MemoryAdapter } from "../src/data/localAdapter.js";
 import { StudyHubRepository } from "../src/data/repository.js";
 import { createEmptyState, normalizeState } from "../src/data/schema.js";
 import { createStore } from "../src/state/store.js";
-import { learningDraftForm, learningTable, reflectionDialog } from "../src/ui/components.js";
+import { learningDraftForm, learningEntryDialog, learningTable, reflectionDialog } from "../src/ui/components.js";
 import { LearningDraftStore, learningDraftStorageKey } from "../src/ui/learningDrafts.js";
 import { focusView } from "../src/views/focusView.js";
 import { MemoryStorage } from "./helpers/cloudHarness.js";
@@ -141,5 +141,89 @@ describe("learning notes and optional reflection fields", () => {
     expect(html).toContain('accept="image/png,image/jpeg,image/webp"');
     expect(html).toContain("necesario al guardar");
     expect(html.match(/opcional/g)).toHaveLength(2);
+  });
+
+  it("edits a learning entry without changing its session, time, or images", async () => {
+    const test = await setup();
+    await test.repository.startTimer(test.task.id);
+    test.advance(75);
+    await test.repository.stopTimer();
+    await test.repository.saveReflection({
+      learned: "Texto original",
+      unresolved: "Duda original",
+      nextSession: "Continuar",
+      learnedImages: [IMAGE],
+    });
+
+    const before = test.repository.getState();
+    const entry = before.learningEntries[0];
+    const session = before.focusSessions[0];
+    const accumulatedSeconds = before.tasks.find((item) => item.id === test.task.id).accumulatedSeconds;
+
+    await test.repository.updateLearningEntry(entry.id, {
+      learned: "Texto corregido\ncon una segunda línea",
+      unresolved: "",
+      nextSession: "Practicar más",
+    });
+
+    const after = test.repository.getState();
+    expect(after.learningEntries[0]).toMatchObject({
+      id: entry.id,
+      focusSessionId: session.id,
+      learned: "Texto corregido\ncon una segunda línea",
+      unresolved: "",
+      nextSession: "Practicar más",
+      learnedImages: [IMAGE],
+    });
+    expect(after.focusSessions).toEqual([session]);
+    expect(after.tasks.find((item) => item.id === test.task.id).accumulatedSeconds).toBe(accumulatedSeconds);
+    await expect(test.repository.updateLearningEntry(entry.id, { learned: "   " })).rejects.toThrow(/qué aprendiste/i);
+  });
+
+  it("deletes only the learning entry and never reuses its preserved session", async () => {
+    const test = await setup();
+    await test.repository.startTimer(test.task.id);
+    test.advance(45);
+    await test.repository.stopTimer();
+    await test.repository.saveReflection({ learned: "Aprendizaje temporal", unresolved: "", nextSession: "" });
+
+    const entry = test.repository.getState().learningEntries[0];
+    const session = test.repository.getState().focusSessions[0];
+    await test.repository.deleteLearningEntry(entry.id);
+
+    let state = test.repository.getState();
+    expect(state.learningEntries).toHaveLength(0);
+    expect(state.focusSessions).toHaveLength(1);
+    expect(state.focusSessions[0]).toMatchObject({ id: session.id, durationSeconds: 45, learningEntryDeleted: true });
+    expect(state.tasks.find((item) => item.id === test.task.id).accumulatedSeconds).toBe(45);
+
+    await test.repository.requestCompletion(test.task.id);
+    state = test.repository.getState();
+    expect(state.pendingCompletion.focusSessionId).toBeNull();
+  });
+
+  it("shows edit and delete actions and an editor with only learned required", async () => {
+    const test = await setup();
+    await test.repository.startTimer(test.task.id);
+    test.advance(30);
+    await test.repository.stopTimer();
+    await test.repository.saveReflection({ learned: "Texto <seguro>", unresolved: "Duda", nextSession: "Seguir", learnedImages: [IMAGE] });
+    const entry = test.repository.getState().learningEntries[0];
+
+    const table = learningTable([entry], test.repository.getState(), "task");
+    expect(table).toContain('data-action="edit-learning-entry"');
+    expect(table).toContain('data-action="delete-learning-entry"');
+    expect(table).toContain(`data-entry-id="${entry.id}"`);
+
+    const dialog = learningEntryDialog(entry, test.task);
+    const learned = dialog.match(/<textarea[^>]*name="learned"[^>]*>/)?.[0] ?? "";
+    const unresolved = dialog.match(/<textarea[^>]*name="unresolved"[^>]*>/)?.[0] ?? "";
+    const nextSession = dialog.match(/<textarea[^>]*name="nextSession"[^>]*>/)?.[0] ?? "";
+    expect(dialog).toContain("Texto &lt;seguro&gt;");
+    expect(dialog).toContain(IMAGE.dataUrl);
+    expect(dialog).toContain("Las imágenes se conservarán sin cambios.");
+    expect(learned).toMatch(/\brequired\b/);
+    expect(unresolved).not.toMatch(/\brequired\b/);
+    expect(nextSession).not.toMatch(/\brequired\b/);
   });
 });

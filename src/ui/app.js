@@ -16,7 +16,7 @@ import { completedProjectsView } from "../views/completedProjectsView.js";
 import { projectView } from "../views/projectView.js";
 import { projectsView } from "../views/projectsView.js";
 import { registerStudyHubTools } from "../webmcp.js";
-import { brand, confirmDialog, globalTasksPanel, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
+import { brand, confirmDialog, globalTasksPanel, learningEntryDialog, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
 import { icon } from "./icons.js";
 import { LearningDraftStore, normalizeLearningDraft } from "./learningDrafts.js";
 
@@ -406,17 +406,21 @@ export class StudyHubApp {
       .map((item) => [normalizeForSearch(item.category), item.category])).values()]
       .sort((a, b) => a.localeCompare(b, "es"));
     const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}), availableCategories: availableTaskCategories } : null;
+    const storedLearningEntry = this.ui.dialog?.type === "learning-entry" ? state.learningEntries.find((item) => item.id === this.ui.dialog.id) : null;
+    const editingLearningEntry = storedLearningEntry ? { ...storedLearningEntry, ...(this.ui.dialog.draft ?? {}) } : null;
+    const editingLearningTask = editingLearningEntry ? state.tasks.find((item) => item.id === editingLearningEntry.taskId) : null;
     const pendingTask = state.pendingCompletion ? state.tasks.find((item) => item.id === state.pendingCompletion.taskId) : null;
     const activeTaskTitle = pendingTask ? pausedOtherTaskName(state, pendingTask.id) : null;
     const leftOpen = this.ui.leftSidebarOpen;
     const rightOpen = this.ui.rightSidebarOpen;
     this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""} ${leftOpen ? "is-left-open" : "is-left-collapsed"} ${rightOpen ? "is-right-open" : "is-right-collapsed"}"><div class="sidebar-shell left-sidebar-shell ${leftOpen ? "is-open" : "is-collapsed"}">${shellSidebar(state, route, this.ui, this.account)}${sidebarRail("left", leftOpen)}</div><main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main><div class="sidebar-shell right-sidebar-shell ${rightOpen ? "is-open" : "is-collapsed"}">${sidebarRail("right", rightOpen)}${globalTasksPanel(state)}</div></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask, { filesEnabled: this.ui.filesEnabled, selectedFiles: this.ui.dialog.files ?? [] }) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    if (editingLearningEntry) this.root.insertAdjacentHTML("beforeend", learningEntryDialog(editingLearningEntry, editingLearningTask));
     this.openPendingDialog();
     this.timer.renderNow();
   }
 
   openPendingDialog() {
-    const selector = this.migrationCandidate ? "#migration-dialog" : this.ui.confirm ? "#confirm-dialog" : this.repository.getState().pendingCompletion ? "#reflection-dialog" : this.ui.dialog?.type === "project" ? "#project-dialog" : this.ui.dialog?.type === "task" ? "#task-dialog" : null;
+    const selector = this.migrationCandidate ? "#migration-dialog" : this.ui.confirm ? "#confirm-dialog" : this.repository.getState().pendingCompletion ? "#reflection-dialog" : this.ui.dialog?.type === "project" ? "#project-dialog" : this.ui.dialog?.type === "task" ? "#task-dialog" : this.ui.dialog?.type === "learning-entry" ? "#learning-entry-dialog" : null;
     if (!selector) return;
     requestAnimationFrame(() => {
       const dialog = this.root.querySelector(selector);
@@ -502,6 +506,22 @@ export class StudyHubApp {
       case "edit-task": {
         const task = state.tasks.find((item) => item.id === target.dataset.taskId);
         this.ui.dialog = { type: "task", id: task?.id, projectId: task?.projectId }; this.ui.menu = null; this.render(); break;
+      }
+      case "edit-learning-entry": {
+        const entry = state.learningEntries.find((item) => item.id === target.dataset.entryId);
+        if (!entry) { this.addToast("El aprendizaje ya no existe.", "error"); break; }
+        this.ui.dialog = { type: "learning-entry", id: entry.id };
+        this.ui.menu = null;
+        this.render();
+        break;
+      }
+      case "delete-learning-entry": {
+        const entry = state.learningEntries.find((item) => item.id === target.dataset.entryId);
+        const task = state.tasks.find((item) => item.id === entry?.taskId);
+        if (!entry) { this.addToast("El aprendizaje ya no existe.", "error"); break; }
+        this.ui.confirm = { type: "delete-learning-entry", id: entry.id, title: "¿Eliminar este aprendizaje?", message: `Se eliminará la reflexión de “${task?.title ?? "Tarea"}”. El tiempo y la sesión de estudio se conservarán.`, confirmLabel: "Eliminar aprendizaje" };
+        this.render();
+        break;
       }
       case "delete-task": {
         const task = state.tasks.find((item) => item.id === target.dataset.taskId);
@@ -731,6 +751,10 @@ export class StudyHubApp {
         this.clearLearningDraft(current.id);
         if (this.router.current().taskId === current.id) this.router.navigate(`projects/${task?.projectId ?? this.router.current().projectId}`);
         this.addToast("Tarea eliminada.");
+      } else if (current.type === "delete-learning-entry") {
+        await this.repository.deleteLearningEntry(current.id);
+        if (this.ui.dialog?.type === "learning-entry" && this.ui.dialog.id === current.id) this.ui.dialog = null;
+        this.addToast("Aprendizaje eliminado. La sesión y su tiempo se conservaron.");
       } else if (current.type === "reset") {
         const taskIds = this.repository.getState().tasks.map((task) => task.id);
         await this.repository.resetAll();
@@ -968,6 +992,15 @@ export class StudyHubApp {
             if (failed) throw new Error(`La tarea se creó, pero ${failed} ${failed === 1 ? "archivo no se pudo adjuntar" : "archivos no se pudieron adjuntar"}. Ábrela para reintentar la carga.`);
           });
         }
+      }
+    }
+    if (form.dataset.form === "learning-entry") {
+      this.ui.dialog = { ...this.ui.dialog, draft: data };
+      const success = await this.safely(async () => { await this.repository.updateLearningEntry(form.dataset.entryId, data); });
+      if (success) {
+        this.ui.dialog = null;
+        this.render();
+        this.addToast("Aprendizaje actualizado.");
       }
     }
     if (form.dataset.form === "reflection") {

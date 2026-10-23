@@ -118,6 +118,11 @@
 .learning-table tbody th { width: 23%; color: #e8eef8; font-weight: 600; }
 .learning-table tbody th small { display: block; margin-top: 3px; color: var(--muted); font-weight: 400; }
 .learning-table tbody th .entry-task-title { margin-top: 5px; color: #dbe7f8; font-weight: 650; }
+.learning-table .learning-actions-heading, .learning-table .learning-actions-cell { width: 82px; padding-inline: 7px; }
+.learning-entry-actions { display: flex; align-items: center; justify-content: center; gap: 5px; }
+.learning-entry-actions button { width: 31px; height: 31px; display: grid; place-items: center; padding: 0; color: #91b9ec; border: 1px solid rgba(77,122,180,.3); border-radius: 8px; background: rgba(22,54,91,.28); cursor: pointer; }
+.learning-entry-actions button:hover, .learning-entry-actions button:focus-visible { color: white; border-color: #3b86e8; background: rgba(35,100,184,.32); outline: 0; }
+.learning-entry-actions button.danger-text:hover, .learning-entry-actions button.danger-text:focus-visible { border-color: rgba(255,92,111,.52); background: rgba(193,47,70,.18); }
 .learned-entry-content { min-width: 0; }
 .learned-entry-content .learning-images { grid-template-columns: 1fr; margin: 0 0 9px; }
 .learned-entry-content .learning-image { padding: 3px; }

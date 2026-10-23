@@ -129,6 +129,7 @@ export function validateState(candidate) {
     sessionsById.set(session.id, session);
     assert(taskIds.has(session.taskId), "Hay una sesión sin tarea válida.");
     assert(Number.isInteger(session.durationSeconds) && session.durationSeconds > 0, "Hay una sesión con duración inválida.");
+    assert(session.learningEntryDeleted === undefined || typeof session.learningEntryDeleted === "boolean", "Hay una marca de aprendizaje eliminado inválida.");
   }
 
   const learningIds = new Set();
@@ -222,7 +223,12 @@ export function normalizeState(candidate) {
       : null;
     return { ...task, description: String(task.description ?? "").slice(0, 500), category: String(task.category ?? "").slice(0, 60), dueDate: recurrence ? null : dueDate, dueTime: recurrence ? null : dueTime, recurrence, completedAt: task.completedAt || null };
   });
-  state.focusSessions = state.focusSessions.map((session) => ({ ...session, reason: String(session.reason || "stopped") }));
+  state.focusSessions = state.focusSessions.map((session) => {
+    const normalized = { ...session, reason: String(session.reason || "stopped") };
+    if (session.learningEntryDeleted === true) normalized.learningEntryDeleted = true;
+    else delete normalized.learningEntryDeleted;
+    return normalized;
+  });
   state.learningEntries = state.learningEntries.map((entry) => {
     const session = state.focusSessions.find((item) => item.id === entry.focusSessionId);
     return {

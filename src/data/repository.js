@@ -372,7 +372,7 @@ export class StudyHubRepository {
         }
         const reflectedSessionIds = new Set(state.learningEntries.map((entry) => entry.focusSessionId).filter(Boolean));
         const latestUnreflected = state.focusSessions
-          .filter((session) => session.taskId === taskId && !reflectedSessionIds.has(session.id))
+          .filter((session) => session.taskId === taskId && !session.learningEntryDeleted && !reflectedSessionIds.has(session.id))
           .sort((a, b) => b.endedAt.localeCompare(a.endedAt))[0];
         focusSessionId = latestUnreflected?.id ?? null;
       }
@@ -412,7 +412,7 @@ export class StudyHubRepository {
         }
         const reflectedSessionIds = new Set(state.learningEntries.map((entry) => entry.focusSessionId).filter(Boolean));
         const latestUnreflected = state.focusSessions
-          .filter((session) => session.taskId === taskId && !reflectedSessionIds.has(session.id))
+          .filter((session) => session.taskId === taskId && !session.learningEntryDeleted && !reflectedSessionIds.has(session.id))
           .sort((a, b) => b.endedAt.localeCompare(a.endedAt))[0];
         focusSessionId = latestUnreflected?.id ?? null;
       }
@@ -475,6 +475,33 @@ export class StudyHubRepository {
         completeTaskOccurrence(task, occurrenceDate, now);
       }
       state.pendingCompletion = null;
+    });
+  }
+
+  async updateLearningEntry(entryId, input) {
+    const learned = cleanMultilineText(input.learned, 1200);
+    const unresolved = cleanMultilineText(input.unresolved, 1200);
+    const nextSession = cleanMultilineText(input.nextSession, 1200);
+    if (!learned) throw new Error("Escribe qué aprendiste antes de guardar.");
+    return this.commit((state) => {
+      const entry = state.learningEntries.find((item) => item.id === entryId);
+      if (!entry) throw new Error("El aprendizaje ya no existe.");
+      entry.learned = learned;
+      entry.unresolved = unresolved;
+      entry.nextSession = nextSession;
+      if (input.learnedImages !== undefined) entry.learnedImages = normalizeLearningImages(input.learnedImages);
+    });
+  }
+
+  async deleteLearningEntry(entryId) {
+    return this.commit((state) => {
+      const entry = state.learningEntries.find((item) => item.id === entryId);
+      if (!entry) throw new Error("El aprendizaje ya no existe.");
+      if (entry.focusSessionId) {
+        const session = state.focusSessions.find((item) => item.id === entry.focusSessionId);
+        if (session) session.learningEntryDeleted = true;
+      }
+      state.learningEntries = state.learningEntries.filter((item) => item.id !== entryId);
     });
   }
 
