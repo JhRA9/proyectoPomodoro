@@ -7,6 +7,7 @@ export function parseRoute(hash = globalThis.location?.hash ?? "") {
     return { name: "projects" };
   }
   if (parts[0] === "completed" && parts.length === 1) return { name: "completedProjects" };
+  if (["home", "results", "focus", "settings"].includes(parts[0]) && parts.length === 1) return { name: `workspace-${parts[0]}` };
   if (parts[0] !== "projects") return { name: "projects" };
   if (parts.length === 1) return { name: "projects" };
   if (parts.length === 2) return { name: "project", projectId: parts[1] };

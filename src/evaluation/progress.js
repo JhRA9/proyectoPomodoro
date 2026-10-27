@@ -36,15 +36,22 @@ export function competencyProgress(state, competency) {
     .filter((item) => item.projectId === competency.projectId && item.status === "completed" && (item.competencyIds ?? []).includes(competency.id))
     .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   if (!evaluations.length) return { percentage: null, level: null, validationState: "unassessed", evaluations: 0, lastEvaluatedAt: null, trend: null };
-  const recent = evaluations.slice(-3);
+  const latest = evaluations.at(-1);
+  const usable = evaluations.filter((item) => Number.isFinite(item.percentage));
+  if (!usable.length || (latest?.attemptVersion === 2 && !latest.canonicalResult)) return { percentage: null, level: null, validationState: "provisional", evaluations: evaluations.length, lastEvaluatedAt: latest?.createdAt, trend: null, pending: true };
+  const recent = usable.slice(-3);
   const percentage = Math.round(recent.reduce((sum, item) => sum + item.percentage, 0) / recent.length);
-  const previous = evaluations.length > recent.length ? evaluations.slice(-6, -3) : [];
+  const previous = usable.length > recent.length ? usable.slice(-6, -3) : [];
   const previousAverage = previous.length ? previous.reduce((sum, item) => sum + item.percentage, 0) / previous.length : null;
   const trend = previousAverage === null ? null : percentage - Math.round(previousAverage);
+  const hasVerifiedEvidence = (item) => !item.attemptVersion || item.legacy || (state.evidence || []).some((e) => e.projectId === item.projectId && e.targetId === item.targetId && e.verification?.status === "verified" && e.verification?.independenceVerified && e.verification?.evidenceSignature === item.evidenceSignature);
+  // Every score contributing to the displayed average must qualify. Older
+  // validated attempts cannot lend their verification to a new AI review.
+  const validated = recent.every(hasVerifiedEvidence) && validationStateFor(usable.filter(hasVerifiedEvidence), percentage) === "validated";
   return {
     percentage,
     level: levelFromPercentage(percentage, competency.thresholds),
-    validationState: validationStateFor(evaluations, percentage),
+    validationState: validated ? "validated" : percentage >= 35 ? "provisional" : "insufficient",
     evaluations: evaluations.length,
     lastEvaluatedAt: evaluations.at(-1)?.createdAt ?? null,
     trend,
@@ -62,7 +69,7 @@ export function studyProjectProgress(state, projectId) {
   const validated = competenceRows.filter((item) => item.progress.validationState === "validated");
   const independentExercises = exercises.filter((item) => ["none", "conceptual_hints"].includes(item.helpLevel) && item.status === "completed").length;
   const totalSeconds = state.tasks.filter((task) => task.projectId === projectId).reduce((sum, task) => sum + task.accumulatedSeconds, 0);
-  const overall = validated.length >= 2
+  const overall = validated.length >= 2 && !competenceRows.some((item) => item.progress.pending)
     ? Math.round(validated.reduce((sum, item) => sum + item.progress.percentage, 0) / validated.length)
     : null;
   return {

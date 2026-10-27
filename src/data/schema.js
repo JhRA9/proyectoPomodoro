@@ -1,6 +1,7 @@
 import { addDaysKey, parseLocalDate, toLocalDateKey } from "../utils/time.js";
 import { MAX_LEARNING_IMAGES, isLearningImageDataUrl, normalizeLearningImages } from "../utils/learningImages.js";
 import { AI_PROFILES, AI_PROVIDERS, DEFAULT_RUBRIC, DELIVERABLE_STATUSES, HELP_LEVELS, PRIVACY_MODES, PROJECT_TYPES, VALIDATION_STATES, defaultEvaluationConfig } from "../evaluation/constants.js";
+import { validateAttempt } from "../evaluation/attempts.js";
 
 export const SCHEMA_VERSION = 2;
 export const TASK_STATUSES = ["pending", "in_progress", "completed"];
@@ -253,6 +254,7 @@ export function validateState(candidate) {
 
   const evaluationIds = new Set();
   for (const item of candidate.evaluations) {
+    validateAttempt(item);
     assert(isSafeId(item.id) && !evaluationIds.has(item.id) && projectIds.has(item.projectId), "Hay evaluaciones inválidas o duplicadas.");
     evaluationIds.add(item.id);
     assert(["pending", "completed", "failed"].includes(item.status), "Hay una evaluación con estado inválido.");

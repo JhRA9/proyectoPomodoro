@@ -23,6 +23,10 @@ import { registerStudyHubTools } from "../webmcp.js";
 import { brand, confirmDialog, globalTasksPanel, learningEntryDialog, learningPathImportDialog, migrationDialog, projectFormDialog, reflectionDialog, taskFormDialog } from "./components.js";
 import { icon } from "./icons.js";
 import { LearningDraftStore, normalizeLearningDraft } from "./learningDrafts.js";
+import { WorkspaceController } from "../workspace/controller.js";
+import { agendaView } from "../workspace/agenda.js";
+import { workspaceProgress } from "../workspace/progressView.js";
+import { workspaceSidebar, workspaceHome, workspaceFocusList, workspaceResults, workspaceLearning, workspaceSettings } from "../workspace/views.js";
 
 const LAYOUT_STORAGE_PREFIX = "studyhub:layout:1";
 
@@ -121,13 +125,13 @@ function settingsMenu(state, account, syncStatus) {
   const cloudProfile = account
     ? `<div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>${escapeHtml(account.email || "Cuenta StudyHub")}</small><small class="sync-state sync-${escapeHtml(syncStatus.state)}" data-sync-state>${escapeHtml(syncStatus.message)}</small></div></div>`
     : `<div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>Modo local</small></div></div>`;
-  return `<div class="floating-menu settings-menu" role="menu">${cloudProfile}${account && (syncStatus.pending || syncStatus.state === "error") ? `<button type="button" role="menuitem" data-action="sync-now">${icon("upload", 18)} Sincronizar ahora</button>` : ""}<button type="button" role="menuitem" data-action="import-learning-path">${icon("book", 18)} Importar ruta educativa</button><button type="button" role="menuitem" data-action="export-backup">${icon("download", 18)} Exportar copia JSON</button><button type="button" role="menuitem" data-action="import-backup">${icon("upload", 18)} Importar copia JSON</button><button type="button" role="menuitem" class="danger-text" data-action="reset-data">${icon("trash", 18)} Limpiar todos los datos</button>${account ? `<button type="button" role="menuitem" data-action="sign-out">${icon("logOut", 18)} Cerrar sesión</button>` : ""}</div>`;
+  return `<div class="floating-menu settings-menu" role="menu">${cloudProfile}<button type="button" role="menuitem" data-action="ws-toggle">Cambiar experiencia StudyHub 2.0 / estable</button>${account && (syncStatus.pending || syncStatus.state === "error") ? `<button type="button" role="menuitem" data-action="sync-now">${icon("upload", 18)} Sincronizar ahora</button>` : ""}<button type="button" role="menuitem" data-action="import-learning-path">${icon("book", 18)} Importar ruta educativa</button><button type="button" role="menuitem" data-action="export-backup">${icon("download", 18)} Exportar copia JSON</button><button type="button" role="menuitem" data-action="import-backup">${icon("upload", 18)} Importar copia JSON</button><button type="button" role="menuitem" class="danger-text" data-action="reset-data">${icon("trash", 18)} Limpiar todos los datos</button>${account ? `<button type="button" role="menuitem" data-action="sign-out">${icon("logOut", 18)} Cerrar sesión</button>` : ""}</div>`;
 }
 
 function shellTopbar(state, route, ui, account) {
   const dashboard = ["projects", "completedProjects"].includes(route.name);
   const topbarSettingsOpen = ui.settingsOpen && ui.settingsAnchor !== "sidebar";
-  return `<header class="topbar"><label class="search-field">${icon("search")}<span class="sr-only">${dashboard ? "Buscar proyectos" : "Buscar en tus proyectos"}</span><input type="search" data-input="${dashboard ? "search" : "project-search"}" value="${escapeHtml(dashboard ? ui.search : ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><button class="icon-button theme-button" type="button" data-action="toggle-theme" aria-label="Cambiar intensidad del tema">${icon(ui.dimTheme ? "moon" : "sun")}</button><div class="settings-wrap"><button class="avatar" type="button" data-action="open-settings" data-settings-anchor="topbar" aria-haspopup="menu" aria-expanded="${topbarSettingsOpen}" aria-label="Copias y ajustes">SH</button>${topbarSettingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div></header>`;
+  return `<header class="topbar">${ui.workspaceV2 ? `<button type="button" class="ws-menu-button" data-action="toggle-left-sidebar" aria-expanded="${ui.leftSidebarOpen}">Menú</button><button type="button" data-action="ws-back" class="ws-back">← Volver</button><button type="button" class="ws-agenda-button" data-action="toggle-right-sidebar" aria-expanded="${ui.rightSidebarOpen}">Agenda</button>` : ""}<label class="search-field">${icon("search")}<span class="sr-only">${dashboard ? "Buscar proyectos" : "Buscar en tus proyectos"}</span><input type="search" data-input="${dashboard ? "search" : "project-search"}" value="${escapeHtml(dashboard ? ui.search : ui.projectSearch)}" placeholder="Buscar proyectos…" /></label><button class="icon-button theme-button" type="button" data-action="toggle-theme" aria-label="Cambiar intensidad del tema">${icon(ui.dimTheme ? "moon" : "sun")}</button><div class="settings-wrap"><button class="avatar" type="button" data-action="open-settings" data-settings-anchor="topbar" aria-haspopup="menu" aria-expanded="${topbarSettingsOpen}" aria-label="Copias y ajustes">SH</button>${topbarSettingsOpen ? settingsMenu(state, account, ui.syncStatus) : ""}</div></header>`;
 }
 
 function toastRegion(toasts) {
@@ -156,6 +160,7 @@ export class StudyHubApp {
     this.layoutStorageKey = `${LAYOUT_STORAGE_PREFIX}:${encodeURIComponent(this.account?.id ?? "local")}`;
     this.ui = initialUiState(this.learningDraftStore.load(), readSidebarLayout(this.layoutStorage, this.layoutStorageKey));
     this.ui.filesEnabled = Boolean(this.fileStore);
+    this.workspaceV2 = new WorkspaceController(this, context);
     if (this.adapter?.getStatus) this.ui.syncStatus = this.adapter.getStatus();
     this.toastCounter = 0;
     this.busy = false;
@@ -243,6 +248,7 @@ export class StudyHubApp {
   }
 
   destroy() {
+    this.workspaceV2.destroy();
     this.timer.stop();
     globalThis.clearTimeout(this.agendaRefreshTimer);
     this.unsubscribeStore();
@@ -387,7 +393,7 @@ export class StudyHubApp {
   resolveRoute() {
     const state = this.repository.getState();
     const route = this.router.current();
-    if (["projects", "completedProjects"].includes(route.name)) return { route, project: null, task: null };
+    if (["projects", "completedProjects"].includes(route.name) || route.name.startsWith("workspace-")) return { route, project: null, task: null };
     const project = state.projects.find((item) => item.id === route.projectId);
     if (!project) {
       queueMicrotask(() => this.router.navigate("projects"));
@@ -403,10 +409,14 @@ export class StudyHubApp {
   }
 
   render({ skipDraftCapture = false } = {}) {
+    this.workspaceV2.capture();
     if (!skipDraftCapture) this.captureOpenFormDraft();
     const state = this.repository.getState();
     if (!state) return;
     const { route, project, task } = this.resolveRoute();
+    const v2 = this.workspaceV2.enabled;
+    globalThis.document?.body?.classList.toggle("workspace-v2", v2);
+    if (v2) this.workspaceV2.route(route);
     if (route.name === "focus" && task && this.fileStore && this.ui.taskFiles?.taskId !== task.id) {
       this.ui.taskFiles = { taskId: task.id, status: "loading", items: [] };
       queueMicrotask(() => { void this.loadTaskFiles(task.id); });
@@ -419,6 +429,14 @@ export class StudyHubApp {
     if (route.name === "project" && project) content = projectView(state, project, this.ui);
     if (route.name === "progress" && project) content = progressView(state, project, this.ui, { aiEnabled: Boolean(this.aiEvaluator) });
     if (route.name === "focus" && project && task) content = focusView(state, project, task, this.ui);
+    if (v2) {
+      if (route.name === "workspace-home") content = workspaceHome(state, this.ui);
+      if (route.name === "workspace-focus") content = workspaceFocusList(state, this.ui);
+      if (route.name === "workspace-results") content = workspaceResults(state);
+      if (route.name === "workspace-settings") content = workspaceSettings(state, this.account, this.ui);
+      if (route.name === "progress" && project) content = workspaceProgress(state, project, this.ui, { aiEnabled: this.aiEvaluator?.supportsAttemptRequests === true });
+      if (route.name === "project" && project && this.ui.wsProjectTab === "learning") content = workspaceLearning(state, project);
+    }
     const storedProject = this.ui.dialog?.type === "project" ? state.projects.find((item) => item.id === this.ui.dialog.id) : null;
     const storedTask = this.ui.dialog?.type === "task" ? state.tasks.find((item) => item.id === this.ui.dialog.id) : null;
     const editingProject = this.ui.dialog?.type === "project" ? { ...(storedProject ?? {}), ...(this.ui.dialog.draft ?? {}) } : null;
@@ -435,10 +453,11 @@ export class StudyHubApp {
     const activeTaskTitle = pendingTask ? pausedOtherTaskName(state, pendingTask.id) : null;
     const leftOpen = this.ui.leftSidebarOpen;
     const rightOpen = this.ui.rightSidebarOpen;
-    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""} ${leftOpen ? "is-left-open" : "is-left-collapsed"} ${rightOpen ? "is-right-open" : "is-right-collapsed"}"><div class="sidebar-shell left-sidebar-shell ${leftOpen ? "is-open" : "is-collapsed"}">${shellSidebar(state, route, this.ui, this.account)}${sidebarRail("left", leftOpen)}</div><main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main><div class="sidebar-shell right-sidebar-shell ${rightOpen ? "is-open" : "is-collapsed"}">${sidebarRail("right", rightOpen)}${globalTasksPanel(state)}</div></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" /><input class="sr-only" type="file" id="learning-path-file" accept="application/json,.json" data-input="learning-path-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask, { filesEnabled: this.ui.filesEnabled, selectedFiles: this.ui.dialog.files ?? [] }) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.pendingLearningPathImport ? learningPathImportDialog(this.ui.pendingLearningPathImport) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
+    this.root.innerHTML = `<div class="app-shell ${this.ui.dimTheme ? "dim-theme" : ""} ${leftOpen ? "is-left-open" : "is-left-collapsed"} ${rightOpen ? "is-right-open" : "is-right-collapsed"}"><div class="sidebar-shell left-sidebar-shell ${leftOpen ? "is-open" : "is-collapsed"}">${v2 ? workspaceSidebar(state, route, this.ui, sidebarProfile(state, this.ui, this.account)) : shellSidebar(state, route, this.ui, this.account)}${sidebarRail("left", leftOpen)}</div><main class="workspace">${shellTopbar(state, route, this.ui, this.account)}${content}</main><div class="sidebar-shell right-sidebar-shell ${rightOpen ? "is-open" : "is-collapsed"}">${sidebarRail("right", rightOpen)}${v2 ? agendaView(state, this.ui) : globalTasksPanel(state)}</div></div><input class="sr-only" type="file" id="backup-file" accept="application/json,.json" data-input="backup-file" /><input class="sr-only" type="file" id="learning-path-file" accept="application/json,.json" data-input="learning-path-file" />${this.ui.dialog?.type === "project" ? projectFormDialog(editingProject) : ""}${this.ui.dialog?.type === "task" ? taskFormDialog(this.ui.dialog.projectId, editingTask, { filesEnabled: this.ui.filesEnabled, selectedFiles: this.ui.dialog.files ?? [] }) : ""}${pendingTask ? reflectionDialog(pendingTask, this.getLearningDraft(pendingTask.id), { ...state.pendingCompletion, activeTaskTitle }) : ""}${this.migrationCandidate ? migrationDialog(this.migrationCandidate) : ""}${this.ui.pendingLearningPathImport ? learningPathImportDialog(this.ui.pendingLearningPathImport) : ""}${this.ui.confirm ? confirmDialog(this.ui.confirm) : ""}${toastRegion(this.ui.toasts)}`;
     if (editingLearningEntry) this.root.insertAdjacentHTML("beforeend", learningEntryDialog(editingLearningEntry, editingLearningTask));
     this.openPendingDialog();
     this.timer.renderNow();
+    this.workspaceV2.restore();
   }
 
   openPendingDialog() {
@@ -498,6 +517,7 @@ export class StudyHubApp {
   }
 
   async runAction(action, target) {
+    if (await this.workspaceV2.action(action, target)) return;
     const state = this.repository.getState();
     const route = this.router.current();
     switch (action) {
@@ -845,6 +865,9 @@ export class StudyHubApp {
         await this.repository.deleteLearningEntry(current.id);
         if (this.ui.dialog?.type === "learning-entry" && this.ui.dialog.id === current.id) this.ui.dialog = null;
         this.addToast("Aprendizaje eliminado. La sesión y su tiempo se conservaron.");
+      } else if (current.type === "delete-evidence") {
+        await this.repository.deleteEvidence(current.id);
+        this.addToast("Evidencia eliminada. El historial de evaluaciones se conserva.");
       } else if (current.type === "import-evaluations") {
         const result = await this.repository.importExternalEvaluations(current.id, this.ui.pendingEvaluationImport);
         this.ui.pendingEvaluationImport = null;
@@ -946,6 +969,7 @@ export class StudyHubApp {
   }
 
   handleInput(event) {
+    if (this.workspaceV2.enabled) this.workspaceV2.drafts.capture(event.target.closest?.("form"));
     const learningForm = event.target.closest?.('form[data-form="learning-draft"], form[data-form="reflection"]');
     if (learningForm && event.target.matches("textarea")) {
       const captured = this.captureLearningDraftForm(learningForm);
@@ -971,6 +995,7 @@ export class StudyHubApp {
   }
 
   async handleChange(event) {
+    if (this.workspaceV2.change(event)) return;
     if (event.target.dataset.input === "new-task-files") {
       if (this.ui.dialog?.type !== "task" || this.ui.dialog.id) return;
       const files = [...(event.target.files ?? [])];
@@ -1061,6 +1086,7 @@ export class StudyHubApp {
     event.preventDefault();
     const form = event.target;
     const data = Object.fromEntries(new FormData(form).entries());
+    if (await this.workspaceV2.submit(form, data)) return;
     if (form.dataset.form === "task") data.repeatDaily = form.elements?.repeatDaily?.checked ? "daily" : data.repeatDaily === "daily" ? "daily" : "";
     if (form.dataset.form === "timer-config") {
       const success = await this.safely(async () => { await this.repository.setFocusDurationParts(data.hours, data.minutes); });
@@ -1236,7 +1262,7 @@ export class StudyHubApp {
   }
 }
 
-async function mountStudyHub(root, { adapter, account = null, auth = null, fileStore = null, aiEvaluator = null }) {
+async function mountStudyHub(root, { adapter, account = null, auth = null, fileStore = null, aiEvaluator = null, previewStorage = null }) {
   const store = createStore(null);
   const repository = new StudyHubRepository({ adapter, store });
   const init = await repository.initialize();
@@ -1248,6 +1274,7 @@ async function mountStudyHub(root, { adapter, account = null, auth = null, fileS
     aiEvaluator,
     adapter,
     migrationCandidate: init.migrationCandidate ?? null,
+    ...(previewStorage ? { draftStorage: previewStorage, layoutStorage: previewStorage, workspaceV2: true } : {}),
   });
   app.mount();
   app.setToolsCleanup(registerStudyHubTools(repository, router, (message, type) => app.addToast(message, type)));
@@ -1257,6 +1284,11 @@ async function mountStudyHub(root, { adapter, account = null, auth = null, fileS
 
 export async function createApp(root, dependencies = {}) {
   if (!root) throw new Error("No se encontró el contenedor de StudyHub.");
+  if (import.meta.env.DEV && new URLSearchParams(globalThis.location?.search || "").get("localPreview") === "workspace") {
+    const prefix = "studyhub:preview:workspace:";
+    const previewStorage = { getItem: (key) => globalThis.localStorage.getItem(prefix + key), setItem: (key, value) => globalThis.localStorage.setItem(prefix + key, value), removeItem: (key) => globalThis.localStorage.removeItem(prefix + key) };
+    return mountStudyHub(root, { adapter: new LocalStorageAdapter(previewStorage), previewStorage });
+  }
   const config = dependencies.config === undefined ? readSupabaseConfig() : dependencies.config;
   const client = dependencies.client ?? (config ? createStudyHubSupabaseClient(config) : null);
   if (!client) return mountStudyHub(root, { adapter: dependencies.localAdapter ?? new LocalStorageAdapter() });

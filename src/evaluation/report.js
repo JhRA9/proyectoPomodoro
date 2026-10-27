@@ -7,10 +7,17 @@ function periodContains(dateValue, range) {
   return (!range.from || key >= range.from) && (!range.to || key <= range.to);
 }
 
+function withoutSource(value) {
+  if (Array.isArray(value)) return value.map(withoutSource);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, key === "code" || key === "evidenceSignature" ? "" : key === "files" ? [] : withoutSource(item)]));
+}
+
 export function createEvaluationReport(state, projectId, options = {}, now = new Date()) {
   const project = state.projects.find((item) => item.id === projectId);
   if (!project) throw new Error("El proyecto ya no existe.");
   const range = { from: options.from || null, to: options.to || null };
+  const includeCode = options.includeCode ?? project.evaluationConfig.privacy !== "private";
   const tasks = state.tasks.filter((item) => item.projectId === projectId);
   const sessions = state.focusSessions.filter((session) => tasks.some((task) => task.id === session.taskId) && periodContains(session.endedAt, range));
   const evaluations = (state.evaluations ?? []).filter((item) => item.projectId === projectId && periodContains(item.createdAt, range));
@@ -25,13 +32,13 @@ export function createEvaluationReport(state, projectId, options = {}, now = new
     dedication: { seconds: sessions.reduce((sum, item) => sum + item.durationSeconds, 0), sessions: sessions.length },
     tasks: tasks.map(({ id, title, status, category, dueDate, accumulatedSeconds }) => ({ id, title, status, category, dueDate, accumulatedSeconds })),
     competencies: (state.competencies ?? []).filter((item) => item.projectId === projectId),
-    exercises: (state.exercises ?? []).filter((item) => item.projectId === projectId).map((item) => options.includeCode === false ? { ...item, code: "", files: [] } : item),
-    evaluations,
+    exercises: (state.exercises ?? []).filter((item) => item.projectId === projectId).map((item) => includeCode ? item : withoutSource(item)),
+    evaluations: includeCode ? evaluations : withoutSource(evaluations),
     stages: (state.deliveryStages ?? []).filter((item) => item.projectId === projectId),
     deliverables: (state.deliverables ?? []).filter((item) => item.projectId === projectId),
-    evidence: (state.evidence ?? []).filter((item) => item.projectId === projectId),
+    evidence: (state.evidence ?? []).filter((item) => item.projectId === projectId).map((item) => includeCode ? item : withoutSource(item)),
     aiUsage: (state.aiRequests ?? []).filter((item) => item.projectId === projectId && periodContains(item.createdAt, range)),
-    progress: project.projectType === "deliverables" ? deliverableProjectProgress(state, projectId) : studyProjectProgress(state, projectId),
+    progress: withoutSource(project.projectType === "deliverables" ? deliverableProjectProgress(state, projectId) : studyProjectProgress(state, projectId)),
   };
   return report;
 }
@@ -64,7 +71,7 @@ export function reportToMarkdown(report) {
     "",
     "## Evaluaciones",
     "",
-    ...(report.evaluations.length ? report.evaluations.map((item) => `### ${item.source} · ${item.createdAt}\n\n${item.percentage}% · ${item.validationState}\n\n${item.summary || "Sin resumen."}`) : ["Sin evaluaciones registradas."]),
+    ...(report.evaluations.length ? report.evaluations.map((item) => `### ${item.source} · ${item.createdAt}\n\n${item.percentage === null ? "Pendiente" : `${item.percentage}%`} · ${item.validationState}\n\n${item.summary || "Sin resumen."}\n\n${(item.reviews || []).map((review) => `- ${review.provider || review.source}: ${review.percentage}% · modelo ${review.model || "no reportado"} · rúbrica v${review.rubricVersion || item.rubricVersion}\n${(review.scores || []).map((score) => `  - ${score.criterionId}: ${score.score}/4 · ${score.justification}`).join("\n")}`).join("\n")}\n${(item.resolutionHistory || []).map((r) => `- Resolución: ${r.actor} · ${r.resolvedAt} · ${r.percentage}% · ${r.explanation}`).join("\n")}`) : ["Sin evaluaciones registradas."]),
     "",
     "## Entregables y bloqueos",
     "",

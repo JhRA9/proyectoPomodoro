@@ -1,3 +1,5 @@
+import { claimEvaluation } from "./requestStore.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -121,13 +123,17 @@ Deno.serve(async (request) => {
     const provider = ["gemini", "cloudflare", "both"].includes(payload.provider) ? payload.provider : "gemini";
     const profile = (["fast", "complete", "deep"].includes(payload.profile) ? payload.profile : "complete") as keyof typeof LIMITS;
     if (payload.privacy === "private" && (payload.exercise?.code || payload.exercise?.files?.length)) return json({ status: "error", message: "El modo privado bloquea el envío de código y archivos." }, 403);
+    const requestRecord = payload.requestVersion === 2 ? await claimEvaluation(request, payload) : null;
+    if (requestRecord?.cached) return json(requestRecord.cached);
     const names = provider === "both" ? ["gemini", "cloudflare"] : [provider];
     const calls = names.map((name) => name === "cloudflare" ? cloudflare(payload, profile) : gemini(payload, profile));
     const settled = await Promise.allSettled(calls);
     const results = settled.flatMap((item) => item.status === "fulfilled" ? [item.value] : []);
     const errors = settled.flatMap((item, index) => item.status === "rejected" ? [{ provider: names[index], code: item.reason?.code || "connection_error", message: item.reason instanceof Error ? item.reason.message : "No se pudo completar la evaluación." }] : []);
-    if (!results.length) throw Object.assign(new Error(errors[0]?.message || "Ningún proveedor respondió."), { code: errors[0]?.code || "connection_error" });
-    return json({ status: errors.length ? "partial" : "completed", provider, profile, results, errors });
+    const response = { status: errors.length ? "partial" : "completed", provider, profile, results, errors, promptVersion: "studyhub-evaluate-v1", requestId: payload.requestId || null };
+    if (requestRecord) await requestRecord.finish(response);
+    if (!results.length && !requestRecord) throw Object.assign(new Error(errors[0]?.message || "Ningún proveedor respondió."), { code: errors[0]?.code || "connection_error" });
+    return json(response);
   } catch (error) {
     const code = error?.code || "connection_error";
     const status = code === "not_configured" ? 503 : code === "permission_error" ? 403 : code === "quota_exhausted" ? 429 : 502;

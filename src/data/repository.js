@@ -76,6 +76,7 @@ export class StudyHubRepository {
     this.store = store;
     this.clock = clock;
     this.unsubscribeExternal = () => {};
+    this.commitTail = Promise.resolve();
   }
 
   async initialize() {
@@ -90,6 +91,12 @@ export class StudyHubRepository {
   getState() { return this.store.getState(); }
 
   async commit(mutator) {
+    const job = this.commitTail.then(() => this.commitOne(mutator));
+    this.commitTail = job.catch(() => {});
+    return job;
+  }
+
+  async commitOne(mutator) {
     const current = this.getState();
     const next = structuredClone(current);
     const result = mutator(next, current);
@@ -613,6 +620,9 @@ export class StudyHubRepository {
       if (!state.projects.some((item) => item.id === projectId)) throw new Error("El proyecto ya no existe.");
       if (competency.parentId && !state.competencies.some((item) => item.id === competency.parentId && item.projectId === projectId)) throw new Error("La competencia principal no es válida.");
       state.competencies.push(competency);
+      const project = state.projects.find((item) => item.id === projectId);
+      project.areaSetVersion = (project.areaSetVersion || 1) + 1;
+      project.areaSetHistory = [...(project.areaSetHistory || []), { version: project.areaSetVersion, date: this.clock().toISOString(), competencyIds: state.competencies.filter((item) => item.projectId === projectId).map((item) => item.id) }];
     });
     return competency;
   }
@@ -677,14 +687,14 @@ export class StudyHubRepository {
     });
   }
 
-  async recordManualEvaluation(exerciseId, input) {
+  async recordManualEvaluation(exerciseId, input, transform = null) {
     const state = this.getState();
     const exercise = state.exercises.find((item) => item.id === exerciseId);
     if (!exercise) throw new Error("El ejercicio ya no existe.");
     const project = state.projects.find((item) => item.id === exercise.projectId);
     const rubric = structuredClone(project.evaluationConfig.rubric);
-    const scores = rubric.criteria.map((criterion) => ({ criterionId: criterion.id, score: Math.max(0, Math.min(4, Number(input[`score_${criterion.id}`]))), justification: cleanMultilineText(input[`justification_${criterion.id}`], 1000) }));
-    if (scores.some((item) => !Number.isFinite(item.score))) throw new Error("Asigna una puntuación de 0 a 4 a cada criterio.");
+    const scores = rubric.criteria.map((criterion) => { const raw = input[`score_${criterion.id}`]; return { criterionId: criterion.id, score: raw === "" || raw == null ? NaN : Number(raw), justification: cleanMultilineText(input[`justification_${criterion.id}`], 1000) }; });
+    if (scores.some((item) => !Number.isFinite(item.score) || item.score < 0 || item.score > 4)) throw new Error("Asigna una puntuación de 0 a 4 a cada criterio.");
     const percentage = rubricPercentage(rubric.criteria, scores);
     const evaluation = {
       id: createId("evaluation"), projectId: project.id, targetType: "exercise", targetId: exercise.id,
@@ -697,11 +707,15 @@ export class StudyHubRepository {
     return this.commit((next) => {
       const existing = next.evaluations.filter((item) => item.projectId === project.id && item.status === "completed" && item.competencyIds.some((id) => evaluation.competencyIds.includes(id)));
       evaluation.validationState = validationStateFor([...existing, evaluation], percentage);
-      next.evaluations.push(evaluation);
+      const recorded = transform ? transform(evaluation, exercise, project, next) : evaluation;
+      const existingIndex = next.evaluations.findIndex((item) => item.id === recorded.id);
+      if (existingIndex >= 0) next.evaluations[existingIndex] = recorded;
+      else next.evaluations.push(recorded);
+      if (recorded.attemptVersion) next.evaluationModelVersion = recorded.attemptVersion;
       const storedExercise = next.exercises.find((item) => item.id === exercise.id);
       storedExercise.status = "completed";
       storedExercise.updatedAt = this.clock().toISOString();
-      return evaluation;
+      return recorded;
     });
   }
 

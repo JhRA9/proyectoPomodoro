@@ -113,3 +113,11 @@ tests/           pruebas de dominio y utilidades
 - El reloj no se basa en contar intervalos; calcula el tiempo desde timestamps y sobrevive a una recarga.
 - Solo puede existir una sesión activa en toda la aplicación.
 - Los datos demo son opcionales y se pueden limpiar; una limpieza no vuelve a sembrarlos automáticamente.
+
+## StudyHub 2.0 en desarrollo
+
+La experiencia Mesa de trabajo está detrás de `workspaceV2`; la interfaz estable sigue siendo la predeterminada. No requiere migrar automáticamente los datos existentes.
+
+Para revisar sin tocar una cuenta cloud, ejecuta `npm run dev -- --host 127.0.0.1 --port 5174` y abre `http://127.0.0.1:5174/?localPreview=workspace#/home`. Este modo de desarrollo usa datos locales aislados. Para volver a la experiencia estable fuera de esa vista previa, usa `?workspaceV2=0#/projects`.
+
+Consulta [la entrega de implementación](docs/StudyHub_2_Entrega_Implementacion.md) para funciones, matriz de conservación, pruebas, migración, reversión y requisitos pendientes de staging. La IA V2 permanece protegida por `VITE_WORKSPACE_AI_V2_READY=false` hasta verificar el registro seguro de solicitudes y la función actualizada en un entorno de pruebas.

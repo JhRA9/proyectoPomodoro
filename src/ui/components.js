@@ -115,10 +115,10 @@ export function dueNotice(tasks) {
   return `<section class="due-notice" aria-labelledby="due-title"><span class="notice-icon">${icon("bell", 24)}</span><div><h2 id="due-title">Tienes ${near.length} ${near.length === 1 ? "tarea próxima" : "tareas próximas"} a vencer</h2><p>Revisa tus fechas y decide qué atender primero.</p></div><ul>${near.slice(0, 3).map((task) => `<li class="due-${dueCategory(task)}"><span></span><div><strong>${escapeHtml(task.title)}</strong><small>${task.category ? `${escapeHtml(task.category)} · ` : ""}${escapeHtml(relativeDueLabel(task.dueDate))}</small></div></li>`).join("")}</ul></section>`;
 }
 
-function globalTaskCard(task, project, now) {
+export function globalTaskCard(task, project, now) {
   const dateClass = task.dueDate ? `due-${dueCategory(task, now)}` : "";
-  const statusLabel = task.status === "in_progress" ? "En curso" : "Pendiente";
-  const dueLabel = task.agendaRecurrence
+  const statusLabel = task.status === "completed" ? "Completada" : task.status === "in_progress" ? "En curso" : "Pendiente";
+  const dueLabel = task.agendaCompleted ? (task.agendaRecurrence ? "Completada este día" : "Completada") : task.agendaRecurrence
     ? "Hoy · diaria"
     : task.dueDate
     ? `${relativeDueLabel(task.dueDate, now)}${formatTime(task.dueTime) ? ` · ${formatTime(task.dueTime)}` : ""}`

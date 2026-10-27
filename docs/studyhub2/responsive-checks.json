@@ -1,0 +1,166 @@
+{
+  "date": "2026-10-26",
+  "environment": "Chrome, localPreview=workspace, datos aislados",
+  "checks": [
+    {
+      "view": "projects/project-programming/tasks/task-workshop",
+      "client": 308,
+      "heading": "Estudios de programación",
+      "main": 308,
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "view": "projects/project-programming/tasks/task-workshop",
+      "client": 378,
+      "heading": "Estudios de programación",
+      "main": 378.3999938964844,
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "view": "projects/project-programming/tasks/task-workshop",
+      "client": 728,
+      "heading": "Estudios de programación",
+      "main": 680,
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "view": "projects/project-programming/tasks/task-workshop",
+      "client": 1012,
+      "heading": "Estudios de programación",
+      "main": 964,
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "view": "projects/project-programming/tasks/task-workshop",
+      "client": 1428,
+      "heading": "Estudios de programación",
+      "main": 1380,
+      "scroll": 1428,
+      "width": 1440
+    },
+    {
+      "view": "projects/project-programming",
+      "client": 308,
+      "heading": "Estudios de programación",
+      "main": 308,
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "view": "projects/project-programming",
+      "client": 378,
+      "heading": "Estudios de programación",
+      "main": 378.3999938964844,
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "view": "projects/project-programming",
+      "client": 728,
+      "heading": "Estudios de programación",
+      "main": 680,
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "view": "projects/project-programming",
+      "client": 1012,
+      "heading": "Estudios de programación",
+      "main": 964,
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "view": "projects/project-programming",
+      "client": 1428,
+      "heading": "Estudios de programación",
+      "main": 1380,
+      "scroll": 1428,
+      "width": 1440
+    },
+    {
+      "view": "projects/project-programming/progress",
+      "client": 308,
+      "heading": "Estudios de programación",
+      "main": 308,
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "view": "projects/project-programming/progress",
+      "client": 378,
+      "heading": "Estudios de programación",
+      "main": 378.3999938964844,
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "view": "projects/project-programming/progress",
+      "client": 728,
+      "heading": "Estudios de programación",
+      "main": 680,
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "view": "projects/project-programming/progress",
+      "client": 1012,
+      "heading": "Estudios de programación",
+      "main": 964,
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "view": "projects/project-programming/progress",
+      "client": 1428,
+      "heading": "Estudios de programación",
+      "main": 1380,
+      "scroll": 1428,
+      "width": 1440
+    },
+    {
+      "view": "home",
+      "client": 308,
+      "heading": "Hola, Estudiante",
+      "main": 308,
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "view": "home",
+      "client": 378,
+      "heading": "Hola, Estudiante",
+      "main": 378.3999938964844,
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "view": "home",
+      "client": 728,
+      "heading": "Hola, Estudiante",
+      "main": 680,
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "view": "home",
+      "client": 1012,
+      "heading": "Hola, Estudiante",
+      "main": 964,
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "view": "home",
+      "client": 1428,
+      "heading": "Hola, Estudiante",
+      "main": 1380,
+      "scroll": 1428,
+      "width": 1440
+    }
+  ]
+}
