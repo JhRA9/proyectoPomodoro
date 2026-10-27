@@ -2,6 +2,8 @@ import { WorkspaceDrafts, workspaceEnabled } from "./preferences.js";
 import { beginAttempt, reserveAttemptRequests, saveAttemptResponse, resolveAttempt, recordManualAttempt, reviseExercise, verifyEvidence, migrationBackup, restoreMigrationBackup, migrateAttempts } from "../evaluation/attempts.js";
 import { toLocalDateKey } from "../utils/time.js";
 import { normalizeForSearch } from "../utils/text.js";
+import { AreaSuggestionsController } from "./areaSuggestions.js";
+import { WorkspacePanels } from "./panels.js";
 
 export class WorkspaceController {
   constructor(app, context = {}) {
@@ -15,6 +17,8 @@ export class WorkspaceController {
     this.backStack = [];
     this.lastPath = null;
     this.formCaptureSuppressed = false;
+    this.areas = new AreaSuggestionsController(this);
+    this.panels = new WorkspacePanels(this);
     const now = new Date();
     Object.assign(app.ui, { workspaceV2: this.enabled, wsAgendaTab: "pending", wsAgendaProject: "all", wsCalendar: { year: now.getFullYear(), month: now.getMonth() }, wsRequests: {} });
     if (this.enabled && !this.storage?.getItem(app.layoutStorageKey)) {
@@ -31,14 +35,18 @@ export class WorkspaceController {
   capture() {
     if (!this.enabled || this.formCaptureSuppressed) return;
     for (const form of this.app.root.querySelectorAll?.("[data-workspace-draft]") || []) this.drafts.capture(form);
+    this.openDetails = new Map([...(this.app.root.querySelectorAll?.("details") || [])].map((element) => [this.detailKey(element), element.open]));
+    this.detailsPath = this.lastPath;
     const active = globalThis.document?.activeElement;
-    this.focus = active && this.app.root.contains?.(active) ? { name: active.name, form: active.closest?.("form")?.dataset.form, dataset: { ...active.dataset }, start: active.selectionStart, end: active.selectionEnd } : null;
+    const form = active?.closest?.("form");
+    this.focus = active && this.app.root.contains?.(active) ? { name: active.name, form: form ? this.drafts.key(form) : null, dataset: { ...active.dataset }, start: active.selectionStart, end: active.selectionEnd } : null;
   }
   restore() {
     if (!this.enabled) return;
     this.drafts.restore(this.app.root);
+    if (this.detailsPath === this.lastPath) for (const element of this.app.root.querySelectorAll("details")) { const key = this.detailKey(element); if (this.openDetails?.has(key)) element.open = this.openDetails.get(key); }
     if (this.focus?.name) {
-      const form = [...this.app.root.querySelectorAll("form")].find((f) => f.dataset.form === this.focus.form);
+      const form = [...this.app.root.querySelectorAll("form")].find((f) => this.drafts.key(f) === this.focus.form);
       const element = [...(form?.elements || [])].find((x) => x.name === this.focus.name);
       element?.focus({ preventScroll: true });
       try { element?.setSelectionRange(this.focus.start, this.focus.end); } catch { /* Selects and numbers have no text selection. */ }
@@ -46,7 +54,9 @@ export class WorkspaceController {
       const element = [...this.app.root.querySelectorAll("[data-action]")].find((el) => Object.entries(this.focus.dataset).every(([key, value]) => el.dataset[key] === value));
       element?.focus({ preventScroll: true });
     }
-    if (this.routeChanged) { const heading = this.app.root.querySelector("main h1"); if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); } this.routeChanged = false; }
+    if (this.routeChanged) { const heading = this.app.root.querySelector("main h1"); if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); } }
+    this.panels.sync(this.routeChanged);
+    this.routeChanged = false;
     this.formCaptureSuppressed = false;
     this.galleryObserver?.disconnect();
     const gallery = this.app.root.querySelector(".ws-gauge-scroll");
@@ -60,10 +70,16 @@ export class WorkspaceController {
       update();
     }
   }
+  detailKey(element) {
+    const form = element.querySelector("form");
+    return `${element.querySelector("summary")?.textContent || ""}:${form ? this.drafts.key(form) : ""}`;
+  }
   route(route) {
+    if (route.projectId) this.areas.draft(route.projectId);
     const path = [route.name, route.projectId, route.taskId].filter(Boolean).join(":");
     if (path === this.lastPath) return;
     this.routeChanged = Boolean(this.lastPath);
+    if (this.routeChanged && this.panels.media?.matches) { this.app.ui.leftSidebarOpen = false; this.app.ui.rightSidebarOpen = false; }
     if (this.lastPath && !this.goingBack) this.backStack.push(this.lastRoute);
     if (route.projectId !== this.lastRoute?.projectId) { this.app.ui.wsArea = "all"; this.app.ui.wsHistoryPage = 0; }
     this.lastPath = path; this.lastRoute = route; this.goingBack = false;
@@ -75,6 +91,7 @@ export class WorkspaceController {
   }
   change(event) {
     if (!this.enabled) return false;
+    this.areas.capture(event.target.closest?.("form"));
     this.drafts.capture(event.target.closest?.("form"));
     const ui = this.app.ui;
     if (event.target.matches?.("[data-ws-area]")) { ui.wsArea = event.target.value; ui.wsHistoryPage = 0; }
@@ -91,6 +108,7 @@ export class WorkspaceController {
       this.app.router.navigate(this.enabled ? "home" : "projects"); this.app.render(); return true;
     }
     if (!this.enabled) return false;
+    if (await this.areas.action(action, target)) return true;
     const app = this.app, ui = app.ui, repo = app.repository, state = repo.getState();
     if (action === "recommendation-to-task") {
       const existing = state.tasks.find((x) => x.projectId === target.dataset.projectId && normalizeForSearch(x.title) === normalizeForSearch(String(target.dataset.recommendation || "").slice(0, 120)));
@@ -148,6 +166,7 @@ export class WorkspaceController {
   }
 
   async submit(form, data) {
+    if (this.enabled && await this.areas.submit(form)) return true;
     if (!this.enabled || !form.matches("[data-workspace-draft]")) return false;
     const app = this.app, repo = app.repository;
     const handlers = {
@@ -224,5 +243,5 @@ export class WorkspaceController {
       if (!this.destroyed) app.render();
     }
   }
-  destroy() { this.destroyed = true; this.galleryObserver?.disconnect(); for (const controller of this.controllers.values()) controller.abort(); }
+  destroy() { this.destroyed = true; this.areas.destroy(); this.panels.destroy(); this.galleryObserver?.disconnect(); for (const controller of this.controllers.values()) controller.abort(); }
 }

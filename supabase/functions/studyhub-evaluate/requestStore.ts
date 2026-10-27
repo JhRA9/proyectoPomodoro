@@ -24,7 +24,7 @@ export async function claimEvaluation(request: Request, payload: any) {
     cached: claim.state === "completed" || claim.state === "failed" ? claim.response : null,
     async finish(result: any) {
       const target = `${url}/rest/v1/studyhub_evaluation_requests?user_id=eq.${encodeURIComponent(user.id)}&request_id=eq.${encodeURIComponent(requestId)}`;
-      const saved = await fetch(target, { method: "PATCH", headers, body: JSON.stringify({ state: result.results?.length ? "completed" : "failed", response: result, finished_at: new Date().toISOString() }), signal: AbortSignal.timeout(10000) });
+      const saved = await fetch(target, { method: "PATCH", headers, body: JSON.stringify({ state: result.results?.length || (result.status === "completed" && result.areas?.length) ? "completed" : "failed", response: result, finished_at: new Date().toISOString() }), signal: AbortSignal.timeout(10000) });
       if (!saved.ok) throw new Error("La IA respondió pero no se pudo confirmar su registro seguro. El intento queda bloqueado para evitar cobros duplicados.");
     },
   };

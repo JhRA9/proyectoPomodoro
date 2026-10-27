@@ -11,11 +11,18 @@ import { createStore } from "../src/state/store.js";
 import { AiEvaluationClient } from "../src/cloud/aiEvaluation.js";
 import { parseRoute } from "../src/router.js";
 import { areaColor } from "../src/workspace/gauges.js";
+import { overlaySide } from "../src/workspace/panels.js";
 
 const storage = () => { const values = new Map(); return { getItem: (k) => values.get(k) || null, setItem: (k, v) => values.set(k, v), removeItem: (k) => values.delete(k) }; };
 const now = new Date(2026, 9, 25, 10);
 
 describe("workspace navigation, agenda and drafts", () => {
+  it("treats compact panels as overlays without affecting desktop or the stable experience",()=>{
+    expect(overlaySide(true,true,{leftSidebarOpen:true})).toBe("left");
+    expect(overlaySide(true,true,{leftSidebarOpen:true,rightSidebarOpen:true})).toBe("right");
+    expect(overlaySide(false,true,{rightSidebarOpen:true})).toBeNull();
+    expect(overlaySide(true,false,{rightSidebarOpen:true})).toBeNull();
+  });
   it("gives each area a distinct color without changing earlier areas when adding one", () => {
     const ids = Array.from({length: 24}, (_, i) => `area-${i}`);
     const colors = ids.map((id) => areaColor(id, ids));
@@ -81,6 +88,15 @@ async function controllerSetup(evaluate) {
 }
 
 describe("workspace real request lifecycle", () => {
+  it("keeps disclosures open across rerenders without reopening a different form", async()=>{
+    const t=await controllerSetup(vi.fn());
+    const form={dataset:{form:"manual-evaluation",exerciseId:"first"}};
+    const detail={open:true,querySelector:selector=>selector==="form"?form:{textContent:"Evaluar"}};
+    t.app.root.querySelectorAll=selector=>selector==="details"?[detail]:[];
+    t.app.root.querySelector=()=>null;t.controller.lastPath="progress:p";
+    t.controller.capture();detail.open=false;t.controller.restore();expect(detail.open).toBe(true);
+    form.dataset.exerciseId="second";detail.open=false;t.controller.restore();expect(detail.open).toBe(false);
+  });
   it("keeps a quota rejection recoverable without sending or locking the submission", async () => {
     const evaluate = vi.fn(); const t = await controllerSetup(evaluate);
     await t.repo.updateEvaluationSettings(t.project.id, { ...t.repo.getState().projects[0].evaluationConfig, maxRequestsPerDay: 1 });

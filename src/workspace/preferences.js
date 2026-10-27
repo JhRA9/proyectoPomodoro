@@ -8,7 +8,7 @@ export class WorkspaceDrafts {
   constructor(storage, account = "local") { this.storage = storage; this.prefix = `studyhub:workspace-drafts:2:${encodeURIComponent(account)}:`; }
   key(form) { return `${form.dataset.form}:${form.dataset.projectId || form.dataset.exerciseId || form.dataset.attemptId || form.dataset.evidenceId || form.dataset.deliverableId || "global"}`; }
   capture(form) {
-    if (!form || !form.matches?.("[data-workspace-draft]")) return;
+    if (!form || form.dataset.areaSuggestions || !form.matches?.("[data-workspace-draft]")) return;
     const data = {};
     for (const element of form.elements) {
       if (!element.name || ["password", "file", "submit"].includes(element.type)) continue;
@@ -21,6 +21,7 @@ export class WorkspaceDrafts {
   }
   restore(root) {
     for (const form of root.querySelectorAll("[data-workspace-draft]")) {
+      if (form.dataset.areaSuggestions) continue;
       let data; try { data = JSON.parse(this.storage?.getItem(this.prefix + this.key(form)) || "null"); } catch { continue; }
       if (!data) continue;
       for (const element of form.elements) {

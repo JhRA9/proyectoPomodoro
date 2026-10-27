@@ -434,7 +434,7 @@ export class StudyHubApp {
       if (route.name === "workspace-focus") content = workspaceFocusList(state, this.ui);
       if (route.name === "workspace-results") content = workspaceResults(state);
       if (route.name === "workspace-settings") content = workspaceSettings(state, this.account, this.ui);
-      if (route.name === "progress" && project) content = workspaceProgress(state, project, this.ui, { aiEnabled: this.aiEvaluator?.supportsAttemptRequests === true });
+      if (route.name === "progress" && project) content = workspaceProgress(state, project, this.ui, { aiEnabled: this.aiEvaluator?.supportsAttemptRequests === true, areaSuggestionsEnabled: this.aiEvaluator?.supportsAreaSuggestions === true });
       if (route.name === "project" && project && this.ui.wsProjectTab === "learning") content = workspaceLearning(state, project);
     }
     const storedProject = this.ui.dialog?.type === "project" ? state.projects.find((item) => item.id === this.ui.dialog.id) : null;
@@ -969,6 +969,7 @@ export class StudyHubApp {
   }
 
   handleInput(event) {
+    if (this.workspaceV2.enabled) this.workspaceV2.areas.capture(event.target.closest?.("form"));
     if (this.workspaceV2.enabled) this.workspaceV2.drafts.capture(event.target.closest?.("form"));
     const learningForm = event.target.closest?.('form[data-form="learning-draft"], form[data-form="reflection"]');
     if (learningForm && event.target.matches("textarea")) {
@@ -1211,6 +1212,7 @@ export class StudyHubApp {
   }
 
   handleKeydown(event) {
+    if (this.workspaceV2?.enabled && this.workspaceV2.panels.keydown(event)) return;
     if (event.key === "ArrowDown" && event.target.matches('[aria-expanded="true"]')) {
       const menu = event.target.parentElement?.querySelector(".floating-menu");
       const first = menu?.querySelector("button:not(:disabled)");

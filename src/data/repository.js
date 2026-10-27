@@ -1,5 +1,5 @@
 import { createId } from "../utils/id.js";
-import { cleanMultilineText, cleanText } from "../utils/text.js";
+import { cleanMultilineText, cleanText, normalizeForSearch } from "../utils/text.js";
 import { normalizeLearningImages } from "../utils/learningImages.js";
 import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
 import { parseLocalDate, toLocalDateKey } from "../utils/time.js";
@@ -609,22 +609,42 @@ export class StudyHubRepository {
   }
 
   async createCompetency(projectId, input) {
-    const competency = {
+    const result = await this.createCompetencies(projectId, [input]);
+    return result.created[0];
+  }
+
+  async createCompetencies(projectId, inputs, { deduplicate = false, provenance = null } = {}) {
+    if (!Array.isArray(inputs) || !inputs.length || inputs.length > 24) throw new Error("Selecciona entre 1 y 24 áreas para guardar.");
+    const prepared = inputs.map((input) => ({
       id: createId("competency"), projectId, parentId: input.parentId || null,
       name: cleanText(input.name, 100), description: cleanMultilineText(input.description, 500),
       objectives: cleanMultilineText(input.objectives, 1200).split("\n").map((value) => value.trim()).filter(Boolean).slice(0, 20),
       dependencies: [], resources: [], createdAt: this.clock().toISOString(),
-    };
-    if (!competency.name) throw new Error("Escribe un nombre para la competencia.");
-    await this.commit((state) => {
-      if (!state.projects.some((item) => item.id === projectId)) throw new Error("El proyecto ya no existe.");
-      if (competency.parentId && !state.competencies.some((item) => item.id === competency.parentId && item.projectId === projectId)) throw new Error("La competencia principal no es válida.");
-      state.competencies.push(competency);
+      ...(provenance ? { creationSource: {
+        method: input.original ? provenance.method : "manual",
+        provider: input.original ? "gemini" : null,
+        model: input.original ? cleanText(input.source?.model, 120) : null,
+        promptVersion: input.original ? cleanText(input.source?.promptVersion, 80) : null,
+        requestId: input.original ? cleanText(input.source?.requestId, 160) : null,
+        acceptedAt: this.clock().toISOString(), original: input.original ? structuredClone(input.original) : null,
+      } } : {}),
+    }));
+    if (prepared.some((item) => !item.name)) throw new Error("Escribe un nombre para cada área seleccionada.");
+    return this.commit((state) => {
       const project = state.projects.find((item) => item.id === projectId);
-      project.areaSetVersion = (project.areaSetVersion || 1) + 1;
-      project.areaSetHistory = [...(project.areaSetHistory || []), { version: project.areaSetVersion, date: this.clock().toISOString(), competencyIds: state.competencies.filter((item) => item.projectId === projectId).map((item) => item.id) }];
+      if (!project) throw new Error("El proyecto ya no existe.");
+      const created = [];
+      for (const item of prepared) {
+        if (item.parentId && !state.competencies.some((parent) => parent.id === item.parentId && parent.projectId === projectId)) throw new Error("La competencia principal no es válida.");
+        if (deduplicate && state.competencies.some((other) => other.projectId === projectId && normalizeForSearch(other.name) === normalizeForSearch(item.name))) continue;
+        state.competencies.push(item); created.push(item);
+      }
+      if (created.length) {
+        project.areaSetVersion = (project.areaSetVersion || 1) + 1;
+        project.areaSetHistory = [...(project.areaSetHistory || []), { version: project.areaSetVersion, date: this.clock().toISOString(), competencyIds: state.competencies.filter((item) => item.projectId === projectId).map((item) => item.id) }];
+      }
+      return { created, skipped: prepared.length - created.length };
     });
-    return competency;
   }
 
   async deleteCompetency(competencyId) {

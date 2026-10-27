@@ -1,0 +1,246 @@
+{
+  "date": "2026-10-27",
+  "environment": "Chrome on Windows; isolated localPreview; CSS viewport; no physical mobile or screen reader",
+  "checks": [
+    {
+      "screen": "Inicio",
+      "target": 320,
+      "client": 308,
+      "h1": "Hola, Estudiante",
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "screen": "Inicio",
+      "target": 390,
+      "client": 378,
+      "h1": "Hola, Estudiante",
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "screen": "Inicio",
+      "target": 740,
+      "client": 728,
+      "h1": "Hola, Estudiante",
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "screen": "Inicio",
+      "target": 1024,
+      "client": 1012,
+      "h1": "Hola, Estudiante",
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "screen": "Inicio",
+      "target": 1440,
+      "client": 1428,
+      "h1": "Hola, Estudiante",
+      "scroll": 1428,
+      "width": 1440
+    },
+    {
+      "screen": "Proyecto",
+      "target": 320,
+      "client": 308,
+      "h1": "Estudios de programación",
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "screen": "Proyecto",
+      "target": 390,
+      "client": 378,
+      "h1": "Estudios de programación",
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "screen": "Proyecto",
+      "target": 740,
+      "client": 728,
+      "h1": "Estudios de programación",
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "screen": "Proyecto",
+      "target": 1024,
+      "client": 1012,
+      "h1": "Estudios de programación",
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "screen": "Proyecto",
+      "target": 1440,
+      "client": 1428,
+      "h1": "Estudios de programación",
+      "scroll": 1428,
+      "width": 1440
+    },
+    {
+      "screen": "Progreso ejercicios",
+      "target": 320,
+      "client": 308,
+      "h1": "Estudios de programación",
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "screen": "Progreso ejercicios",
+      "target": 390,
+      "client": 378,
+      "h1": "Estudios de programación",
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "screen": "Progreso ejercicios",
+      "target": 740,
+      "client": 728,
+      "h1": "Estudios de programación",
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "screen": "Progreso ejercicios",
+      "target": 1024,
+      "client": 1012,
+      "h1": "Estudios de programación",
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "screen": "Progreso ejercicios",
+      "target": 1440,
+      "client": 1428,
+      "h1": "Estudios de programación",
+      "scroll": 1428,
+      "width": 1440
+    },
+    {
+      "screen": "Enfoque",
+      "target": 320,
+      "client": 308,
+      "h1": "Estudios de programación",
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "screen": "Enfoque",
+      "target": 390,
+      "client": 378,
+      "h1": "Estudios de programación",
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "screen": "Enfoque",
+      "target": 740,
+      "client": 728,
+      "h1": "Estudios de programación",
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "screen": "Enfoque",
+      "target": 1024,
+      "client": 1012,
+      "h1": "Estudios de programación",
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "screen": "Enfoque",
+      "target": 1440,
+      "client": 1428,
+      "h1": "Estudios de programación",
+      "scroll": 1428,
+      "width": 1440
+    },
+    {
+      "screen": "Resultados",
+      "target": 320,
+      "client": 308,
+      "h1": "Resultados",
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "screen": "Resultados",
+      "target": 390,
+      "client": 378,
+      "h1": "Resultados",
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "screen": "Resultados",
+      "target": 740,
+      "client": 728,
+      "h1": "Resultados",
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "screen": "Resultados",
+      "target": 1024,
+      "client": 1012,
+      "h1": "Resultados",
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "screen": "Resultados",
+      "target": 1440,
+      "client": 1428,
+      "h1": "Resultados",
+      "scroll": 1428,
+      "width": 1440
+    },
+    {
+      "screen": "Áreas método mixto",
+      "target": 320,
+      "client": 308,
+      "h1": "Estudios de programación",
+      "scroll": 308,
+      "width": 320
+    },
+    {
+      "screen": "Áreas método mixto",
+      "target": 390,
+      "client": 378,
+      "h1": "Estudios de programación",
+      "scroll": 378,
+      "width": 390
+    },
+    {
+      "screen": "Áreas método mixto",
+      "target": 740,
+      "client": 728,
+      "h1": "Estudios de programación",
+      "scroll": 728,
+      "width": 740
+    },
+    {
+      "screen": "Áreas método mixto",
+      "target": 1024,
+      "client": 1012,
+      "h1": "Estudios de programación",
+      "scroll": 1012,
+      "width": 1024
+    },
+    {
+      "screen": "Áreas método mixto",
+      "target": 1440,
+      "client": 1428,
+      "h1": "Estudios de programación",
+      "scroll": 1428,
+      "width": 1440
+    }
+  ]
+}

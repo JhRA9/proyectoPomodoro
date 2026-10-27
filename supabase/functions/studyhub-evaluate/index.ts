@@ -1,4 +1,5 @@
 import { claimEvaluation } from "./requestStore.ts";
+import { suggestAreas } from "./areaSuggestions.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,6 +115,19 @@ Deno.serve(async (request) => {
     const authorization = request.headers.get("Authorization");
     if (!authorization?.startsWith("Bearer ")) return json({ status: "error", message: "Se requiere una sesión autenticada." }, 401);
     const payload = await request.json();
+    if (payload.action === "suggest-areas") {
+      if (payload.requestVersion !== 2) return json({ status: "error", message: "Se requiere el registro seguro de solicitudes." }, 400);
+      // Whitelist the request before hashing: no attached files or scores are used.
+      const input = { action: "suggest-areas", requestVersion: 2, provider: "gemini", requestId: payload.requestId, retry: payload.retry === true, context: payload.context };
+      if (typeof input.context !== "string" || !input.context.trim() || input.context.length > 2000) return json({ status: "error", message: "Escribe un contexto de hasta 2000 caracteres." }, 400);
+      const record = await claimEvaluation(request, input);
+      if (record.cached) return json(record.cached);
+      let result;
+      try { result = await suggestAreas(input); }
+      catch (error) { result = { status: "error", message: error instanceof Error ? error.message : "No se pudo obtener la propuesta. Continúa manualmente." }; }
+      await record.finish(result);
+      return json(result);
+    }
     const config = configuration();
     if (payload.action === "check") {
       const names = payload.provider === "gemini" ? ["gemini"] : payload.provider === "cloudflare" ? ["cloudflare"] : ["gemini", "cloudflare"];

@@ -20,6 +20,11 @@ describe("durable evaluation request gateway (simulated HTTP, no remote calls)",
     await claim.finish(t.cached); expect(t.fetch.mock.calls[2][0]).toContain("user_id=eq.verified-user"); expect(JSON.parse(t.fetch.mock.calls[2][1].body).state).toBe("completed");
   });
   it("returns the cached result without starting another request", async () => { const t=setup("completed"); const claim=await claimEvaluation(t.request,t.payload); expect(claim.cached).toEqual(t.cached); expect(t.fetch).toHaveBeenCalledTimes(2); });
+  it("persists an area proposal as completed so recovery never triggers another inference", async()=>{
+    const t=setup();const claim=await claimEvaluation(t.request,{action:"suggest-areas",requestVersion:2,requestId:"area-request:test",provider:"gemini",context:"CSS"});
+    await claim.finish({status:"completed",areas:[{name:"CSS",description:"",objectives:[]}]});
+    expect(JSON.parse(t.fetch.mock.calls[2][1].body).state).toBe("completed");
+  });
   it("rejects requests already being processed", async () => { const t=setup("processing");await expect(claimEvaluation(t.request,t.payload)).rejects.toThrow(/sigue procesándose/); });
   it("rejects an unknown claim state before any provider call", async () => { const t=setup("unknown");await expect(claimEvaluation(t.request,t.payload)).rejects.toThrow(/estado inválido/); });
   it("rejects an identifier reused for a different solution", async () => { const t=setup("conflict");await expect(claimEvaluation(t.request,t.payload)).rejects.toThrow(/otra solución/); });
