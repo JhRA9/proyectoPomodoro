@@ -99,8 +99,9 @@ export async function verifyLocalStaging(config) {
     checked(await secondDevice.auth.signInWithPassword(credentials[0]));
     checked(await a.from("studyhub_states").update({state:legacy,revision:legacy.revision}).eq("user_id",owner.id));
     const synchronization = await verifySynchronization({clientA:a,clientB:secondDevice,userId:owner.id});
-    const edge = await verifyEdge({config,client:a,admin,userId:owner.id,run});
-    return { status:"passed",checks:["auth-two-synthetic-accounts","RLS-read-write-delete","snapshot-CAS","backup-roundtrip","private-storage","durable-concurrent-claims","cached-retry","account-isolation",...synchronization,...edge],inference:"not executed" };
+    const edge = await verifyEdge({config,client:a,otherClient:b,admin,userId:owner.id,run});
+    for (const signedIn of [...clients,secondDevice]) { checked(await signedIn.auth.signOut({scope:"local"})); assert.equal((await signedIn.auth.getSession()).data.session,null); }
+    return { status:"passed",checks:["auth-two-synthetic-accounts","auth-signout","RLS-read-write-delete","snapshot-CAS","backup-roundtrip","private-storage","durable-concurrent-claims","cached-retry","account-isolation",...synchronization,...edge],inference:"not executed" };
   } finally {
     // Only resources belonging to synthetic users created by THIS invocation.
     const failures=[];

@@ -1,4 +1,4 @@
-import { createDemoState, createEmptyState, normalizeState } from "./schema.js";
+import { createEmptyState, normalizeState } from "./schema.js";
 import { readStoredState } from "./localAdapter.js";
 
 const CACHE_PREFIX = "studyhub:cloud-cache:1:";
@@ -63,10 +63,11 @@ function sameSnapshot(a, b) {
 }
 
 export class SupabaseStateGateway {
-  constructor({ client, userId }) {
+  constructor({ client, userId, useSnapshotRpc = false }) {
     if (!client || !userId) throw new Error("La conexión cloud no está configurada.");
     this.client = client;
     this.userId = userId;
+    this.useSnapshotRpc = useSnapshotRpc;
   }
 
   async load() {
@@ -98,7 +99,9 @@ export class SupabaseStateGateway {
       revision: state.revision,
       updated_at: state.updatedAt,
     };
-    const query = expectedRevision === null
+    const query = this.useSnapshotRpc
+      ? this.client.rpc("studyhub_save_snapshot", { p_state: state, p_expected_revision: expectedRevision })
+      : expectedRevision === null
       ? this.client.from("studyhub_states").insert(row)
       : this.client.from("studyhub_states").update(row).eq("user_id", this.userId).eq("revision", expectedRevision);
     const { data, error } = await query.select("state, revision, updated_at").maybeSingle();
@@ -280,7 +283,7 @@ export class CloudStorageAdapter {
           };
         }
 
-        const initial = createDemoState();
+        const initial = createEmptyState();
         this.cache(initial);
         this.setStatus("synced", false, "Cuenta conectada · preparando la nube");
         return { data: initial, recovery: null, isNew: true, source: "cloud-new" };

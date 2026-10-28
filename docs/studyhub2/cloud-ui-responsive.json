@@ -1,0 +1,187 @@
+{
+  "at": "2026-10-28T20:51:09.569Z",
+  "environment": "local Vite with isolated real cloud staging",
+  "measurement": "CSS viewport pixels; browser zoom compensated; visible controls including label hit areas; internal calendar scrolling permitted",
+  "results": [
+    {
+      "scrollWidth": 308,
+      "smallControls": [],
+      "view": "settings",
+      "width": 320
+    },
+    {
+      "scrollWidth": 378,
+      "smallControls": [],
+      "view": "settings",
+      "width": 390
+    },
+    {
+      "scrollWidth": 728,
+      "smallControls": [],
+      "view": "settings",
+      "width": 740
+    },
+    {
+      "scrollWidth": 1012,
+      "smallControls": [],
+      "view": "settings",
+      "width": 1024
+    },
+    {
+      "scrollWidth": 1428,
+      "smallControls": [],
+      "view": "settings",
+      "width": 1440
+    },
+    {
+      "scrollWidth": 308,
+      "smallControls": [],
+      "view": "agenda-calendar-after-touch-fix",
+      "width": 320
+    },
+    {
+      "scrollWidth": 378,
+      "smallControls": [],
+      "view": "agenda-calendar-after-touch-fix",
+      "width": 390
+    },
+    {
+      "scrollWidth": 728,
+      "smallControls": [],
+      "view": "agenda-calendar-after-touch-fix",
+      "width": 740
+    },
+    {
+      "scrollWidth": 1012,
+      "smallControls": [],
+      "view": "agenda-calendar-after-touch-fix",
+      "width": 1024
+    },
+    {
+      "scrollWidth": 1428,
+      "smallControls": [],
+      "view": "agenda-calendar-after-touch-fix",
+      "width": 1440
+    },
+    {
+      "scrollWidth": 308,
+      "smallControls": [],
+      "view": "focus-final",
+      "width": 320
+    },
+    {
+      "scrollWidth": 378,
+      "smallControls": [],
+      "view": "focus-final",
+      "width": 390
+    },
+    {
+      "scrollWidth": 728,
+      "smallControls": [],
+      "view": "focus-final",
+      "width": 740
+    },
+    {
+      "scrollWidth": 1012,
+      "smallControls": [],
+      "view": "focus-final",
+      "width": 1024
+    },
+    {
+      "scrollWidth": 1428,
+      "smallControls": [],
+      "view": "focus-final",
+      "width": 1440
+    },
+    {
+      "scrollWidth": 308,
+      "smallControls": [],
+      "view": "project-final",
+      "width": 320
+    },
+    {
+      "scrollWidth": 378,
+      "smallControls": [],
+      "view": "project-final",
+      "width": 390
+    },
+    {
+      "scrollWidth": 728,
+      "smallControls": [],
+      "view": "project-final",
+      "width": 740
+    },
+    {
+      "scrollWidth": 1012,
+      "smallControls": [],
+      "view": "project-final",
+      "width": 1024
+    },
+    {
+      "scrollWidth": 1440,
+      "smallControls": [],
+      "view": "project-final",
+      "width": 1440
+    },
+    {
+      "scrollWidth": 308,
+      "smallControls": [],
+      "view": "competencies-final",
+      "width": 320
+    },
+    {
+      "scrollWidth": 378,
+      "smallControls": [],
+      "view": "competencies-final",
+      "width": 390
+    },
+    {
+      "scrollWidth": 728,
+      "smallControls": [],
+      "view": "competencies-final",
+      "width": 740
+    },
+    {
+      "scrollWidth": 1012,
+      "smallControls": [],
+      "view": "competencies-final",
+      "width": 1024
+    },
+    {
+      "scrollWidth": 1428,
+      "smallControls": [],
+      "view": "competencies-final",
+      "width": 1440
+    },
+    {
+      "scrollWidth": 308,
+      "smallControls": [],
+      "view": "history-final",
+      "width": 320
+    },
+    {
+      "scrollWidth": 378,
+      "smallControls": [],
+      "view": "history-final",
+      "width": 390
+    },
+    {
+      "scrollWidth": 728,
+      "smallControls": [],
+      "view": "history-final",
+      "width": 740
+    },
+    {
+      "scrollWidth": 1012,
+      "smallControls": [],
+      "view": "history-final",
+      "width": 1024
+    },
+    {
+      "scrollWidth": 1428,
+      "smallControls": [],
+      "view": "history-final",
+      "width": 1440
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-28T21:01:48.1937297Z",
+  "finalState": {
+    "legacy_write_enabled": false,
+    "objects": 0,
+    "public_policies": 4,
+    "snapshots": 0,
+    "synthetic_users": 0
+  },
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "orderedMigrationFiles": [
+    {
+      "file": "202609160001_create_studyhub_states.sql",
+      "sha256": "8bb498fb15d0927a6d05f1082267a256bba5a01a81419e14ac49d80329fbe2e0"
+    },
+    {
+      "file": "202609210001_create_task_files_bucket.sql",
+      "sha256": "1e9806804155b70401cfd8822493970c28a5bdeb07b185b14b4564d8f2f75995"
+    },
+    {
+      "file": "202610230001_upgrade_studyhub_state_v2.sql",
+      "sha256": "9188d5f65f4c3110b41377bcaec270697b4772ea3593f85968d8524297243157"
+    },
+    {
+      "file": "202610250001_evaluation_requests.sql",
+      "sha256": "12654758b6619a202593e41df30a010a8214a790a6fd6d5329d1610cfea4a432"
+    }
+  ]
+}

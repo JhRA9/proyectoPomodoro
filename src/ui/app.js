@@ -1309,7 +1309,7 @@ export async function createApp(root, dependencies = {}) {
     if (!userId) throw new Error("La sesión de StudyHub no contiene un usuario válido.");
     const gateway = dependencies.gatewayFactory
       ? dependencies.gatewayFactory({ client, userId })
-      : new SupabaseStateGateway({ client, userId });
+      : new SupabaseStateGateway({ client, userId, useSnapshotRpc: import.meta.env.VITE_STUDYHUB_SNAPSHOT_RPC === "true" });
     const adapter = dependencies.cloudAdapterFactory
       ? dependencies.cloudAdapterFactory({ gateway, userId })
       : new CloudStorageAdapter({ gateway, userId });

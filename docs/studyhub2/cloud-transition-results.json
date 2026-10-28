@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-28T16:01:36.238Z",
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "status": "passed",
+  "checks": [
+    "legacy-upsert-update-delete-denied",
+    "RPC-own-account-only",
+    "RPC-anonymous-denied",
+    "cloud-history-backup-sha256",
+    "cloud-conservative-migration",
+    "cloud-history-file-restoration",
+    "two-real-client-CAS",
+    "conflict-preserved-on-reload",
+    "offline-queue-reload-flush",
+    "legacy-history-through-sync",
+    "sync-now-pulls-second-client",
+    "explicit-conflict-recovery",
+    "lost-ack-idempotent-recovery"
+  ],
+  "backupSha256": "f6a29cb868fa56ce932a05410b08b6a44349a5fd1b4566f0137086ac2373db3a",
+  "backupScope": "synthetic snapshot data, not full database schema"
+}

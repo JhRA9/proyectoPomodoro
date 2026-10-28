@@ -1,13 +1,20 @@
 // Durable idempotency is required for workspace requests. Missing infrastructure
-// fails before any paid provider call; legacy callers keep the existing contract.
-export async function claimEvaluation(request: Request, payload: any) {
+// fails before any paid provider call; legacy callers keep the response contract
+// but also pass the durable account quota, using a server-generated request ID.
+export async function authenticateRequest(request: Request) {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) throw Object.assign(new Error("El registro seguro de solicitudes no está configurado."), { code: "not_configured" });
-  if (typeof payload.requestId !== "string" || !/^[a-zA-Z0-9:_-]{1,200}$/.test(payload.requestId)) throw new Error("Identificador de solicitud inválido.");
   const userResponse = await fetch(`${url}/auth/v1/user`, { headers: { apikey: key, Authorization: request.headers.get("Authorization") || "" }, signal: AbortSignal.timeout(10000) });
   if (!userResponse.ok) throw Object.assign(new Error("La sesión no es válida. Vuelve a iniciar sesión."), { code: "permission_error" });
   const user = await userResponse.json();
+  if (typeof user.id !== "string" || !user.id) throw Object.assign(new Error("No se pudo identificar la cuenta."), { code: "permission_error" });
+  return { url, key, user };
+}
+
+export async function claimEvaluation(request: Request, payload: any, identity?: Awaited<ReturnType<typeof authenticateRequest>>) {
+  if (typeof payload.requestId !== "string" || !/^[a-zA-Z0-9:_-]{1,200}$/.test(payload.requestId)) throw Object.assign(new Error("Identificador de solicitud inválido."), { code: "invalid_request" });
+  const { url, key, user } = identity || await authenticateRequest(request);
   const { requestId, retry: _retry, ...content } = payload;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(content)));
   const hash = Array.from(new Uint8Array(digest), (v) => v.toString(16).padStart(2, "0")).join("");

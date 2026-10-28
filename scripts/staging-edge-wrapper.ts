@@ -16,6 +16,7 @@ globalThis.fetch = async (input, init) => {
   const areas = Boolean(body && JSON.parse(body).generationConfig?.responseJsonSchema?.properties?.areas);
   const result = areas ? { areas: [{ name: "Synthetic accessible forms", description: "Fixture only", objectives: ["Label controls"] }] }
     : {summary:"Synthetic staging review",provisionalLevel:null,scores:[{criterionId:"correctness",score:2,justification:"Synthetic fixture"}],strengths:[],weaknesses:[],recommendations:[],demonstratedCompetencyIds:[],notDemonstratedCompetencyIds:[]};
+  if (!areas && body.includes("STAGING_INVALID_RESPONSE")) result.scores[0].score = 99;
   return Response.json(url.hostname === "generativelanguage.googleapis.com"
     ? {modelVersion:"synthetic-gemini",candidates:[{content:{parts:[{text:JSON.stringify(result)}]}}]}
     : {choices:[{message:{content:JSON.stringify(result)}}]});

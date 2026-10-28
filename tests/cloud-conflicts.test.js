@@ -4,6 +4,12 @@ import { CloudStorageAdapter, SupabaseStateGateway } from "../src/data/cloudAdap
 import { FakeCloudBackend, MemoryStorage, createCloudContext } from "./helpers/cloudHarness.js";
 
 describe("cloud conflict recovery",()=>{
+  it("starts a new cloud account without fabricated tasks, time or learning",async()=>{
+    const backend=new FakeCloudBackend();
+    const account=await createCloudContext({backend,userId:"empty-new-account"});
+    for(const collection of ["projects","tasks","focusSessions","learningEntries","evaluations"]) expect(account.repository.getState()[collection]).toEqual([]);
+    account.repository.destroy();
+  });
   it("keeps a shared tab queue bound to its old base even if another tab advances the cached revision",async()=>{
     const backend=new FakeCloudBackend();backend.seed("a",createEmptyState());
     const shared=new MemoryStorage();

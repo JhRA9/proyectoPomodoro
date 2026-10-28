@@ -11,9 +11,9 @@ class IsolatedStorage {
 }
 
 // Real HTTP gateways and repositories; only browser storage/connectivity are controlled.
-export async function verifySynchronization({ clientA, clientB, userId }) {
+export async function verifySynchronization({ clientA, clientB, userId, useSnapshotRpc = false }) {
   const contexts = [];
-  async function open(client, storage = new IsolatedStorage(), connectivity = { online: true }, gateway = new SupabaseStateGateway({ client, userId })) {
+  async function open(client, storage = new IsolatedStorage(), connectivity = { online: true }, gateway = new SupabaseStateGateway({ client, userId, useSnapshotRpc })) {
     const adapter = new CloudStorageAdapter({ gateway, userId,
       storage, eventTarget: null, isOnline: () => connectivity.online });
     const repository = new StudyHubRepository({ adapter, store: createStore(null) });
@@ -50,7 +50,7 @@ export async function verifySynchronization({ clientA, clientB, userId }) {
     const recovered=await conflictReload.adapter.useRemoteAfterConflict();
     assert.ok(recovered.projects.some(p=>p.id===offline.id));
     assert.ok([...loser.storage.values.keys()].some(k=>k.startsWith(loser.adapter.keys.conflictBackup+":")));
-    const actualGateway=new SupabaseStateGateway({client:clientA,userId});let drop=true;
+    const actualGateway=new SupabaseStateGateway({client:clientA,userId,useSnapshotRpc});let drop=true;
     const lost=await open(clientA,undefined,undefined,{load:()=>actualGateway.load(),save:async(state,options)=>{
       const result=await actualGateway.save(state,options);
       if(drop){drop=false;throw new TypeError("Synthetic lost acknowledgement after actual commit");}

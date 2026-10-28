@@ -1,5 +1,6 @@
-import { claimEvaluation } from "./requestStore.ts";
+import { claimEvaluation, authenticateRequest } from "./requestStore.ts";
 import { suggestAreas } from "./areaSuggestions.ts";
+import { readPayload, validateEvaluationInput, parseReview } from "./validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,7 +88,7 @@ async function gemini(payload: any, profile: keyof typeof LIMITS) {
   if (!response.ok) throw Object.assign(new Error(body?.error?.message || "Gemini rechazó la solicitud."), { code: classifyError(response.status, body?.error?.message || ""), status: response.status });
   const text = body.candidates?.[0]?.content?.parts?.map((part: any) => part.text || "").join("");
   if (!text) throw Object.assign(new Error("Gemini no devolvió una evaluación."), { code: "invalid_response" });
-  return { ...JSON.parse(text), provider: "gemini", model: body.modelVersion || model, latencyMs: Date.now() - started, usage: { inputTokens: body.usageMetadata?.promptTokenCount ?? null, outputTokens: body.usageMetadata?.candidatesTokenCount ?? null, reasoningTokens: body.usageMetadata?.thoughtsTokenCount ?? null, neurons: null } };
+  return { ...parseReview(text, payload), provider: "gemini", model: body.modelVersion || model, latencyMs: Date.now() - started, usage: { inputTokens: body.usageMetadata?.promptTokenCount ?? null, outputTokens: body.usageMetadata?.candidatesTokenCount ?? null, reasoningTokens: body.usageMetadata?.thoughtsTokenCount ?? null, neurons: null } };
 }
 
 async function cloudflare(payload: any, profile: keyof typeof LIMITS) {
@@ -105,7 +106,7 @@ async function cloudflare(payload: any, profile: keyof typeof LIMITS) {
   if (!response.ok) throw Object.assign(new Error(body?.errors?.[0]?.message || body?.error?.message || "Cloudflare rechazó la solicitud."), { code: classifyError(response.status, JSON.stringify(body)), status: response.status });
   const text = body.choices?.[0]?.message?.content;
   if (!text) throw Object.assign(new Error("Cloudflare no devolvió una evaluación."), { code: "invalid_response" });
-  return { ...JSON.parse(text), provider: "cloudflare", model, latencyMs: Date.now() - started, usage: { inputTokens: body.usage?.prompt_tokens ?? null, outputTokens: body.usage?.completion_tokens ?? null, reasoningTokens: body.usage?.completion_tokens_details?.reasoning_tokens ?? null, neurons: body.usage?.neurons ?? null } };
+  return { ...parseReview(text, payload), provider: "cloudflare", model, latencyMs: Date.now() - started, usage: { inputTokens: body.usage?.prompt_tokens ?? null, outputTokens: body.usage?.completion_tokens ?? null, reasoningTokens: body.usage?.completion_tokens_details?.reasoning_tokens ?? null, neurons: body.usage?.neurons ?? null } };
 }
 
 Deno.serve(async (request) => {
@@ -114,13 +115,16 @@ Deno.serve(async (request) => {
   try {
     const authorization = request.headers.get("Authorization");
     if (!authorization?.startsWith("Bearer ")) return json({ status: "error", message: "Se requiere una sesión autenticada." }, 401);
-    const payload = await request.json();
+    const payload = await readPayload(request);
+    // Validate with Auth even on legacy/check calls; gateway JWT verification
+    // alone is not portable across managed projects with asymmetric keys.
+    const identity = await authenticateRequest(request);
     if (payload.action === "suggest-areas") {
       if (payload.requestVersion !== 2) return json({ status: "error", message: "Se requiere el registro seguro de solicitudes." }, 400);
       // Whitelist the request before hashing: no attached files or scores are used.
       const input = { action: "suggest-areas", requestVersion: 2, provider: "gemini", requestId: payload.requestId, retry: payload.retry === true, context: payload.context };
       if (typeof input.context !== "string" || !input.context.trim() || input.context.length > 2000) return json({ status: "error", message: "Escribe un contexto de hasta 2000 caracteres." }, 400);
-      const record = await claimEvaluation(request, input);
+      const record = await claimEvaluation(request, input, identity);
       if (record.cached) return json(record.cached);
       let result;
       try { result = await suggestAreas(input); }
@@ -128,7 +132,6 @@ Deno.serve(async (request) => {
       await record.finish(result);
       return json(result);
     }
-    const config = configuration();
     if (payload.action === "check") {
       const names = payload.provider === "gemini" ? ["gemini"] : payload.provider === "cloudflare" ? ["cloudflare"] : ["gemini", "cloudflare"];
       const checked = await Promise.all(names.map(async (name) => [name, await probe(name as "gemini" | "cloudflare")]));
@@ -136,8 +139,12 @@ Deno.serve(async (request) => {
     }
     const provider = ["gemini", "cloudflare", "both"].includes(payload.provider) ? payload.provider : "gemini";
     const profile = (["fast", "complete", "deep"].includes(payload.profile) ? payload.profile : "complete") as keyof typeof LIMITS;
+    validateEvaluationInput(payload, LIMITS[profile].maxInputChars);
     if (payload.privacy === "private" && (payload.exercise?.code || payload.exercise?.files?.length)) return json({ status: "error", message: "El modo privado bloquea el envío de código y archivos." }, 403);
-    const requestRecord = payload.requestVersion === 2 ? await claimEvaluation(request, payload) : null;
+    // Legacy clients do not send an idempotency key, but must still pass the
+    // account quota and durable-store gate. Their response shape is unchanged.
+    const durablePayload = payload.requestVersion === 2 ? payload : { ...payload, requestId: `legacy:${crypto.randomUUID()}` };
+    const requestRecord = await claimEvaluation(request, durablePayload, identity);
     if (requestRecord?.cached) return json(requestRecord.cached);
     const names = provider === "both" ? ["gemini", "cloudflare"] : [provider];
     const calls = names.map((name) => name === "cloudflare" ? cloudflare(payload, profile) : gemini(payload, profile));
@@ -150,7 +157,7 @@ Deno.serve(async (request) => {
     return json(response);
   } catch (error) {
     const code = error?.code || "connection_error";
-    const status = code === "not_configured" ? 503 : code === "permission_error" ? 403 : code === "quota_exhausted" ? 429 : 502;
+    const status = code === "invalid_request" ? 400 : code === "payload_too_large" ? 413 : code === "not_configured" ? 503 : code === "permission_error" ? 403 : code === "quota_exhausted" ? 429 : 502;
     return json({ status: "error", code, message: error instanceof Error ? error.message : "No se pudo completar la evaluación." }, status);
   }
 });

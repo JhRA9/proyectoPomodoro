@@ -1,18 +1,44 @@
 import { beforeEach,afterEach,describe,it,expect,vi } from "vitest";
-const store=vi.hoisted(()=>({claim:vi.fn(),finish:vi.fn()}));
-vi.mock("../supabase/functions/studyhub-evaluate/requestStore.ts",()=>({claimEvaluation:store.claim}));
+const store=vi.hoisted(()=>({claim:vi.fn(),finish:vi.fn(),authenticate:vi.fn()}));
+vi.mock("../supabase/functions/studyhub-evaluate/requestStore.ts",()=>({claimEvaluation:store.claim,authenticateRequest:store.authenticate}));
 let handler, transport;
 beforeEach(async()=>{
   vi.resetModules();store.claim.mockReset();store.finish.mockReset();store.claim.mockResolvedValue({cached:null,finish:store.finish});
+  store.authenticate.mockReset();store.authenticate.mockResolvedValue({user:{id:"synthetic"}});
   vi.stubGlobal("Deno",{env:{get:()=>"synthetic-test-only"},serve:fn=>{handler=fn;}});
   transport=vi.fn();vi.stubGlobal("fetch",transport);
   await import("../supabase/functions/studyhub-evaluate/index.ts");
 });
 afterEach(()=>vi.unstubAllGlobals());
-const payload={action:"evaluate",requestVersion:2,requestId:"test:both",provider:"both",privacy:"standard",exercise:{title:"Synthetic",code:"return 1"},rubric:{criteria:[]}};
+const payload={action:"evaluate",requestVersion:2,requestId:"test:both",provider:"both",privacy:"standard",exercise:{title:"Synthetic",code:"return 1"},rubric:{criteria:[{id:"correctness"}]}};
 const send=body=>handler(new Request("http://localhost/test",{method:"POST",headers:{Authorization:"Bearer synthetic","Content-Type":"application/json"},body:JSON.stringify(body)}));
-const review={summary:"Synthetic response",scores:[],recommendations:[]};
+const review={summary:"Synthetic response",provisionalLevel:null,scores:[{criterionId:"correctness",score:2,justification:"Synthetic fixture"}],recommendations:[],strengths:[],weaknesses:[],demonstratedCompetencyIds:[],notDemonstratedCompetencyIds:[]};
 describe("edge handler integration with simulated provider network",()=>{
+  it("does not let legacy payloads bypass the account quota",async()=>{
+    store.claim.mockRejectedValue(Object.assign(new Error("Quota exhausted"),{code:"quota_exhausted"}));
+    expect((await send({...payload,requestVersion:1,requestId:undefined})).status).toBe(429);
+    expect(store.claim.mock.calls[0][1].requestId).toMatch(/^legacy:/);
+    expect(transport).not.toHaveBeenCalled();
+  });
+  it("authenticates check and legacy calls before contacting any provider",async()=>{
+    store.authenticate.mockRejectedValue(Object.assign(new Error("Invalid session"),{code:"permission_error"}));
+    expect((await send({action:"check"})).status).toBe(403);
+    expect((await send({...payload,requestVersion:1})).status).toBe(403);
+    expect(transport).not.toHaveBeenCalled();expect(store.claim).not.toHaveBeenCalled();
+  });
+  it("rejects malformed, oversized and unknown requests before reserving or calling providers",async()=>{
+    for(const body of [null,[],{...payload,action:"unknown"},{...payload,provider:"unknown"},{...payload,rubric:null},{...payload,rubric:{criteria:[]}}]) expect((await send(body)).status).toBe(400);
+    expect((await send({...payload,exercise:{code:"x".repeat(61000)}})).status).toBe(413);
+    expect((await send({...payload,extra:"x".repeat(262144)})).status).toBe(413);
+    const malformed=new Request("http://localhost/test",{method:"POST",headers:{Authorization:"Bearer synthetic"},body:"{"});
+    expect((await handler(malformed)).status).toBe(400);
+    expect(transport).not.toHaveBeenCalled();expect(store.claim).not.toHaveBeenCalled();
+  });
+  it("stores a provider validation failure without treating invalid scores as success",async()=>{
+    transport.mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify({...review,scores:[{criterionId:"correctness",score:99,justification:"Invalid"}]})}]}}]})));
+    const result=await(await send({...payload,provider:"gemini",rubric:{criteria:[{id:"correctness"}]}})).json();
+    expect(result.results).toHaveLength(0);expect(result.errors[0].code).toBe("invalid_response");expect(store.finish).toHaveBeenCalledTimes(1);
+  });
   it("starts both transports concurrently, preserves separate results and stores once",async()=>{
     const pending=[];transport.mockImplementation(url=>new Promise(resolve=>pending.push({url,resolve})));
     const call=send(payload);await vi.waitFor(()=>expect(transport).toHaveBeenCalledTimes(2));

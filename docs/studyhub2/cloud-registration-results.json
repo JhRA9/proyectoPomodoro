@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-28T20:53:35.343Z",
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "status": "blocked",
+  "publicRegistrationAttempted": true,
+  "errorCode": "email_address_invalid",
+  "httpStatus": 400,
+  "emailDelivery": "not verified; no real mailbox or custom SMTP authorized",
+  "limitation": "Admin-created account login/RLS tests do not validate public registration or email confirmation delivery."
+}

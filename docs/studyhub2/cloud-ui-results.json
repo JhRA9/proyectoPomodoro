@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-28T20:56:46.584Z",
+  "environment": "isolated cloud staging with actual V2 UI",
+  "checks": [
+    "UI-auth-login-and-logout",
+    "UI-project-and-task-creation",
+    "UI-infinite-start-pause-reload-stop",
+    "UI-draft-survives-reload",
+    "UI-optional-reflection-fields",
+    "UI-completion-and-history",
+    "UI-agenda-pending-vs-completed",
+    "UI-global-calendar",
+    "UI-manual-competency-and-draft",
+    "UI-exercise-manual-review-history",
+    "UI-provisional-gauge-not-domain",
+    "UI-recommendation-to-task",
+    "UI-AI-disabled-manual-available",
+    "UI-JSON-Markdown-backup-download",
+    "exported-backup-matches-cloud-records"
+  ],
+  "counts": {
+    "projects": 1,
+    "tasks": 2,
+    "completedTasks": 1,
+    "timedSessions": 1,
+    "seconds": 1,
+    "reflections": 2,
+    "exercises": 1,
+    "attempts": 1,
+    "manualReviews": 1
+  },
+  "exports": [
+    {
+      "name": "studyhub-backup-2026-10-28.json",
+      "bytes": 24899,
+      "sha256": "18854df0745ba59d2613d79872422d780eff0b0066840f86732d1503806426fa"
+    },
+    {
+      "name": "studyhub-evaluacion-project-8c810caa-4965-43c2-b698-ec484c7f78ec.json",
+      "bytes": 38309,
+      "sha256": "f5045435a0afc8bd9668a6cd66af867d31ea02c67fed6b1d8a7667be8ded27f3"
+    },
+    {
+      "name": "studyhub-evaluacion-project-8c810caa-4965-43c2-b698-ec484c7f78ec.md",
+      "bytes": 1505,
+      "sha256": "d7755e925defe09f1921b15bcce1cdf41373c3e2aaec3f104b813e2541c3a3eb"
+    }
+  ],
+  "limitations": [
+    "UI restore/file upload blocked by extension file URL permission; backend Storage and restore tested separately",
+    "Synthetic provider proposals tested through managed Edge; real provider UI acceptance pending",
+    "Physical mobile and screen reader not tested"
+  ],
+  "cleanup": "synthetic UI account and snapshot removed"
+}

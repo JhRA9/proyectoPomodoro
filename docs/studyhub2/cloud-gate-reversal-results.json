@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-28T16:00:06.723Z",
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "status": "passed",
+  "checks": [
+    "SQL-gate-rollback-restores-legacy-writes",
+    "rollback-preserves-snapshot",
+    "RPC-works-during-rollback",
+    "gate-reenabled-denies-legacy-writes",
+    "reenable-preserves-history"
+  ],
+  "gateFinalState": "enabled",
+  "scope": "staging only; no production data or schema rollback"
+}
