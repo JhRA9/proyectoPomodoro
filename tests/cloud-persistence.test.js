@@ -309,7 +309,7 @@ describe("offline outbox and timer traffic", () => {
     backend.online = false;
     const project = await addProject(first.repository, "Creado offline");
     const keys = cloudStorageKeys(USER_A);
-    expect(JSON.parse(storage.getItem(keys.pending)).projects[0].id).toBe(project.id);
+    expect(first.adapter.readPending().data.projects[0].id).toBe(project.id);
     expect(backend.stateFor(USER_A).projects).toHaveLength(0);
     first.repository.destroy();
 

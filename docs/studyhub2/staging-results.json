@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-27",
+  "branch": "feat/studyhub-2",
+  "baseCommit": "443c32a1f70d7ef0fa734b05cadab735942b3ba6",
+  "environment": {
+    "kind": "disposable-local",
+    "url": "http://127.0.0.1:54321",
+    "docker": "29.4.3",
+    "supabaseCLI": "2.122.0",
+    "postgresImage": "public.ecr.aws/supabase/postgres:17.11.0.006",
+    "edgeImage": "public.ecr.aws/supabase/edge-runtime:v1.77.8",
+    "edgeBootstrap": "test-only local Auth validation and synthetic provider transport; application handler unchanged"
+  },
+  "initialFailure": "Only one concurrent snapshot may win: 2 !== 1",
+  "integration": {
+    "status": "passed",
+    "checks": [
+      "auth-two-synthetic-accounts",
+      "RLS-read-write-delete",
+      "snapshot-CAS",
+      "backup-roundtrip",
+      "private-storage",
+      "durable-concurrent-claims",
+      "cached-retry",
+      "account-isolation",
+      "two-real-client-CAS",
+      "conflict-preserved-on-reload",
+      "offline-queue-reload-flush",
+      "legacy-history-through-sync",
+      "sync-now-pulls-second-client",
+      "explicit-conflict-recovery",
+      "lost-ack-idempotent-recovery",
+      "edge-JWT",
+      "edge-real-auth-cache",
+      "edge-two-reviews",
+      "edge-concurrent-idempotency",
+      "edge-partial-failure",
+      "edge-cancel-late-recovery",
+      "edge-synthetic-areas"
+    ],
+    "inference": "not executed"
+  },
+  "history": {
+    "status": "passed",
+    "checks": [
+      "SQL-v1-to-v2",
+      "unknown-fields-preserved",
+      "legacy-evaluations-preserved",
+      "pg-dump-sha256",
+      "actual-SQL-data-restore"
+    ],
+    "backupSha256": "2a6432d2d04f83f83fe0df0867dc2f48d4ae1b65a3eb0d8ba210345d3be6b94e",
+    "scope": "snapshot data rollback; schema and security tables remain installed"
+  },
+  "tests": {
+    "status": "passed",
+    "count": 194,
+    "files": 30
+  },
+  "build": {
+    "status": "passed",
+    "modules": 88,
+    "jsKB": 518.57,
+    "gzipKB": 142.52,
+    "warning": "bundle over 500 kB"
+  },
+  "notExecuted": [
+    "real Gemini inference",
+    "real Cloudflare inference",
+    "managed cloud deployment JWT configuration",
+    "physical mobile",
+    "screen reader"
+  ],
+  "productionAccess": false,
+  "push": false,
+  "merge": false,
+  "deploy": false
+}

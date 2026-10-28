@@ -2,6 +2,8 @@
 
 Fecha de revisión: 27 de octubre de 2026. Rama: `feat/studyhub-2`. Base de este cierre: `bf367c886bb03de84cfacf71821ca3f857de2846`.
 
+Actualización posterior: la verificación local pendiente se ejecutó y se corrigió un conflicto de sincronización. Consultar [Verificación de staging](StudyHub_2_Verificacion_Staging.md) para resultados y condiciones actuales. Este informe conserva el estado histórico del cierre anterior.
+
 El commit final se identifica en la entrega del chat y con `git log -1 --format=%H -- docs/StudyHub_2_Cierre_Candidato.md`. Este informe forma parte de ese commit.
 
 **Recomendación: lista con condiciones para la decisión final de publicación.** La candidata local tiene la funcionalidad pendiente implementada y las comprobaciones descritas abajo superadas. La activación cloud de V2 requiere primero verificar Auth, RLS, Storage, migraciones y proveedores en un entorno independiente. No se recomienda habilitar las banderas de IA ni publicar sin superar esas condiciones.

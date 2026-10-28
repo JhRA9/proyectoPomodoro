@@ -125,7 +125,7 @@ function settingsMenu(state, account, syncStatus) {
   const cloudProfile = account
     ? `<div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>${escapeHtml(account.email || "Cuenta StudyHub")}</small><small class="sync-state sync-${escapeHtml(syncStatus.state)}" data-sync-state>${escapeHtml(syncStatus.message)}</small></div></div>`
     : `<div class="settings-profile"><span>SH</span><div><strong>${escapeHtml(state.settings.profileName)}</strong><small>Modo local</small></div></div>`;
-  return `<div class="floating-menu settings-menu" role="menu">${cloudProfile}<button type="button" role="menuitem" data-action="ws-toggle">Cambiar experiencia StudyHub 2.0 / estable</button>${account && (syncStatus.pending || syncStatus.state === "error") ? `<button type="button" role="menuitem" data-action="sync-now">${icon("upload", 18)} Sincronizar ahora</button>` : ""}<button type="button" role="menuitem" data-action="import-learning-path">${icon("book", 18)} Importar ruta educativa</button><button type="button" role="menuitem" data-action="export-backup">${icon("download", 18)} Exportar copia JSON</button><button type="button" role="menuitem" data-action="import-backup">${icon("upload", 18)} Importar copia JSON</button><button type="button" role="menuitem" class="danger-text" data-action="reset-data">${icon("trash", 18)} Limpiar todos los datos</button>${account ? `<button type="button" role="menuitem" data-action="sign-out">${icon("logOut", 18)} Cerrar sesión</button>` : ""}</div>`;
+  return `<div class="floating-menu settings-menu" role="menu">${cloudProfile}<button type="button" role="menuitem" data-action="ws-toggle">Cambiar experiencia StudyHub 2.0 / estable</button>${account && syncStatus.state === "conflict" ? `<button type="button" role="menuitem" data-action="sync-use-remote">Guardar copia local y cargar nube</button>` : ""}${account && (syncStatus.pending || syncStatus.state === "error") ? `<button type="button" role="menuitem" data-action="sync-now">${icon("upload", 18)} Sincronizar ahora</button>` : ""}<button type="button" role="menuitem" data-action="import-learning-path">${icon("book", 18)} Importar ruta educativa</button><button type="button" role="menuitem" data-action="export-backup">${icon("download", 18)} Exportar copia JSON</button><button type="button" role="menuitem" data-action="import-backup">${icon("upload", 18)} Importar copia JSON</button><button type="button" role="menuitem" class="danger-text" data-action="reset-data">${icon("trash", 18)} Limpiar todos los datos</button>${account ? `<button type="button" role="menuitem" data-action="sign-out">${icon("logOut", 18)} Cerrar sesión</button>` : ""}</div>`;
 }
 
 function shellTopbar(state, route, ui, account) {
@@ -712,7 +712,15 @@ export class StudyHubApp {
       }); break;
       case "sync-now": await this.safely(async () => {
         const result = await this.repository.syncNow();
-        this.addToast(result?.synced ? "Datos sincronizados." : "La sincronización sigue pendiente.", result?.synced ? "success" : "error");
+        this.addToast(result?.synced ? "Datos sincronizados." : (result?.error?.message || "La sincronización sigue pendiente."), result?.synced ? "success" : "error");
+      }); break;
+      case "sync-use-remote": await this.safely(async () => {
+        this.exportBackup();
+        const remote = await this.adapter.useRemoteAfterConflict();
+        this.store.setState(remote);
+        this.ui.settingsOpen = false;
+        this.render();
+        this.addToast("Nube cargada. Conserva la copia JSON para recuperar tus cambios locales.");
       }); break;
       case "sign-out": await this.safely(async () => {
         await this.auth?.signOut();

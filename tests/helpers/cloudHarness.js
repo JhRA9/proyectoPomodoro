@@ -86,9 +86,11 @@ export class FakeCloudBackend {
         };
       },
 
-      async save(nextState) {
+      async save(nextState, { expectedRevision } = {}) {
         backend.calls.push({ operation: "save", userId, data: structuredClone(nextState) });
         if (!backend.online) throw new TypeError("Failed to fetch cloud state");
+        const current = backend.rows.get(userId);
+        if (expectedRevision !== (current?.revision ?? null)) throw Object.assign(new Error("Conflicto sintético"), {code:"STUDYHUB_CONFLICT",status:409});
         backend.rows.set(userId, structuredClone(nextState));
         return {
           data: structuredClone(nextState),

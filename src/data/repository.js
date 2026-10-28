@@ -853,7 +853,13 @@ export class StudyHubRepository {
   }
 
   async syncNow() {
-    return this.adapter.flush?.() ?? { data: null, synced: true };
+    const job = this.commitTail.then(async () => {
+      const result = await this.adapter.flush?.() ?? { data: null, synced: true };
+      if (result.synced && result.data) this.store.setState(result.data);
+      return result;
+    });
+    this.commitTail = job.catch(() => {});
+    return job;
   }
 
   async resetAll() {

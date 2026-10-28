@@ -7,6 +7,8 @@ import { StudyHubRepository } from "../src/data/repository.js";
 import { MemoryAdapter } from "../src/data/localAdapter.js";
 import { createStore } from "../src/state/store.js";
 import { beginAttempt, saveAttemptResponse, migrationBackup, migrateAttempts, restoreMigrationBackup } from "../src/evaluation/attempts.js";
+import { verifySynchronization } from "./staging-sync.mjs";
+import { verifyEdge } from "./staging-edge.mjs";
 
 // Deliberately does not load .env or linked Supabase credentials. No AI calls.
 export function stagingConfig(env) {
@@ -34,11 +36,12 @@ export async function stagingFixture() {
 export async function verifyLocalStaging(config) {
   const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
   const admin = createClient(config.url, config.service, options);
-  const users = [], clients = [], bucket = "studyhub-task-files";
+  const users = [], clients = [], credentials = [], bucket = "studyhub-task-files";
   const run = randomUUID(); let objectPath;
   try {
     for (let index = 0; index < 2; index++) {
       const email = `studyhub-${run}-${index}@example.test`, password = randomBytes(32).toString("hex");
+      credentials.push({email,password});
       const { user } = checked(await admin.auth.admin.createUser({ email, password, email_confirm: true })); users.push(user);
       const client = createClient(config.url, config.anon, options); clients.push(client);
       checked(await client.auth.signInWithPassword({ email, password }));
@@ -92,7 +95,12 @@ export async function verifyLocalStaging(config) {
     assert.equal(checked(await admin.rpc("studyhub_claim_evaluation",{...params,p_user_id:other.id})).state,"claimed","Identidad separada por cuenta");
     checked(await admin.from("studyhub_evaluation_requests").update({state:"failed",response:{status:"error"}}).eq("user_id",other.id));
     assert.equal(checked(await admin.rpc("studyhub_claim_evaluation",{...params,p_user_id:other.id,p_retry:true})).state,"claimed");
-    return { status:"passed",checks:["auth-two-synthetic-accounts","RLS-read-write-delete","snapshot-CAS","backup-roundtrip","private-storage","durable-concurrent-claims","cached-retry","account-isolation"],inference:"not executed" };
+    const secondDevice = createClient(config.url, config.anon, options);
+    checked(await secondDevice.auth.signInWithPassword(credentials[0]));
+    checked(await a.from("studyhub_states").update({state:legacy,revision:legacy.revision}).eq("user_id",owner.id));
+    const synchronization = await verifySynchronization({clientA:a,clientB:secondDevice,userId:owner.id});
+    const edge = await verifyEdge({config,client:a,admin,userId:owner.id,run});
+    return { status:"passed",checks:["auth-two-synthetic-accounts","RLS-read-write-delete","snapshot-CAS","backup-roundtrip","private-storage","durable-concurrent-claims","cached-retry","account-isolation",...synchronization,...edge],inference:"not executed" };
   } finally {
     // Only resources belonging to synthetic users created by THIS invocation.
     const failures=[];
