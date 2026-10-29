@@ -22,7 +22,11 @@ export async function suggestAreas(payload: any) {
       } },
     }), signal: AbortSignal.timeout(90000),
   });
-  if (!response.ok) throw Object.assign(new Error(response.status === 429 ? "Gemini no tiene cuota disponible. Puedes continuar manualmente." : "No se pudo obtener la propuesta de Gemini. Puedes continuar manualmente."), { code: response.status === 429 ? "quota_exhausted" : "connection_error" });
+  if (!response.ok) {
+    const code = response.status === 429 ? "quota_exhausted" : response.status === 503 ? "provider_busy" : [401,403].includes(response.status) ? "permission_error" : response.status === 404 ? "model_unavailable" : "connection_error";
+    const message = code === "quota_exhausted" ? "Gemini no tiene cuota disponible." : code === "provider_busy" ? "Gemini está saturado temporalmente." : "No se pudo obtener la propuesta de Gemini.";
+    throw Object.assign(new Error(`${message} Puedes continuar manualmente. No se reintentó automáticamente.`), { code, status: response.status });
+  }
   let body;
   try { body = await response.json(); } catch { throw new Error("Gemini devolvió una respuesta ilegible. Puedes continuar manualmente."); }
   const text = body.candidates?.[0]?.content?.parts?.map((part: any) => part.text || "").join("");

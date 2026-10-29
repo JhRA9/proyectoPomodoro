@@ -1,0 +1,34 @@
+{
+  "at": "2026-10-29T16:49:46.109Z",
+  "branch": "feat/studyhub-2",
+  "main": "4210809303a0dad2825c3bde2324196eda5992a4",
+  "tests": {
+    "total": 214,
+    "passed": 214,
+    "failed": 0,
+    "success": true
+  },
+  "secretScan": {
+    "scannedTextFiles": 160,
+    "findings": [],
+    "scope": "Git tracked/untracked nonignored text and dist including source maps; pattern-based, not a guarantee against arbitrary secrets"
+  },
+  "artifacts": [
+    {
+      "file": "dist/assets/index-B1MjDmhx.css",
+      "bytes": 82237
+    },
+    {
+      "file": "dist/assets/index-DcBSLnFp.js",
+      "bytes": 518728
+    },
+    {
+      "file": "dist/assets/index-DcBSLnFp.js.map",
+      "bytes": 1922633
+    },
+    {
+      "file": "dist/index.html",
+      "bytes": 990
+    }
+  ]
+}

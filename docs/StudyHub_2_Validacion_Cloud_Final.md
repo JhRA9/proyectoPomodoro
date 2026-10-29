@@ -1,5 +1,7 @@
 # StudyHub 2.0 — Cierre de validación cloud
 
+Actualización del 29 de octubre: ver [Cierre de pruebas de IA real](StudyHub_2_Cierre_IA_Real.md). Este informe conserva la evidencia histórica del día 28; los pendientes de registro, handler y proveedores se actualizan en ese nuevo cierre.
+
 28 de octubre de 2026 · Rama `feat/studyhub-2`.
 
 **Veredicto: lista con condiciones para decidir una publicación con IA deshabilitada. No está aprobada todavía la activación de proveedores reales.** La infraestructura cloud, los datos y la interfaz manual se comprobaron en un proyecto independiente. No se realizó merge, push ni despliegue de StudyHub en Netlify, ni se utilizaron usuarios, archivos o claves de producción.

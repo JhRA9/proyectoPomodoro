@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-10-29T16:38:39.1430770Z",
+  "authorized": true,
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "gemini": {
+    "evidence": "AI Studio API PRUEBAS belongs to Gemini API, free tier. Rate-limit dashboard: 0/5 RPM, 0/250K TPM, 0/20 RPD maximum over last 28 days; reporting can lag 15 minutes, not an atomic quota reservation. Metadata GET succeeded.",
+    "plan": "free",
+    "modelAccessible": true,
+    "model": "gemini-3.8-flash",
+    "paidOverflowDisabled": true,
+    "accountId": "gen-lang-client-0979111398",
+    "remainingRequests": 20
+  },
+  "cloudflare": {
+    "evidence": "Workers plans: Free $0 Current plan; 10000 neurons/day. Usage balance unavailable in dashboard. Model GET succeeded. Conservative estimate uses full 128K input context at 31818 neurons/M plus 1800 output at 68182 neurons/M, rounded above 4200 to 5000; actual tiny exercise is much smaller.",
+    "directApiWithoutGateway": true,
+    "dailyFreeAllocation": 10000,
+    "maximumEstimatedNeurons": 5000,
+    "hardFreeCapVerified": true,
+    "model": "@cf/openai/gpt-oss-120b",
+    "hardCapEvidence": "https://developers.cloudflare.com/workers-ai/platform/pricing/ Workers Free errors at the daily allocation; no paid upgrade or AI Gateway configured in this direct API request.",
+    "paidOverflowDisabled": true,
+    "plan": "free",
+    "remainingNeurons": null,
+    "accountId": "e966630e2334dacda828220a3c8debca",
+    "modelAccessible": true
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "syntheticTransport": false,
+  "files": [
+    {
+      "file": "areaSuggestions.ts",
+      "sha256": "cd8fc932c30a06cf259b3a3a25fedc976b149d010df79a6400c840d2324313b1"
+    },
+    {
+      "file": "index.ts",
+      "sha256": "61eb630f9021fe6787cb41d314b2d81b9f0ff90191353d5ab9f42955ff42442a"
+    },
+    {
+      "file": "requestStore.ts",
+      "sha256": "358abd311f89736f8e22b5515d55b6deb409258f9e965bf61665d3e8f89a6689"
+    },
+    {
+      "file": "validation.ts",
+      "sha256": "66a1a4fa4ad5705403061f243f498b2739d67ad795832aa605b109dfcfed6c57"
+    }
+  ],
+  "providerKeysConfigured": false,
+  "deployed": true,
+  "at": "2026-10-29T03:04:50.8644342Z"
+}

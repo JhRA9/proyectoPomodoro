@@ -52,3 +52,17 @@ export function parseReview(text: string, payload: any) {
   // Preserve the original fields and scores; never repair or average AI results.
   return result;
 }
+
+// Preserve useful failure evidence without persisting prompts, private code or
+// an arbitrary provider response in error messages. Never repair partial JSON.
+export function parseProviderReview(text: string, payload: any, metadata: any) {
+  const count = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+  const reason = typeof metadata.finishReason === "string" && /^[a-zA-Z_]{1,40}$/.test(metadata.finishReason) ? metadata.finishReason : null;
+  const diagnostics = { finishReason: reason, responseCharacters: typeof text === "string" ? text.length : 0,
+    inputTokens: count(metadata.inputTokens), outputTokens: count(metadata.outputTokens), reasoningTokens: count(metadata.reasoningTokens) };
+  try {
+    if (["length", "MAX_TOKENS"].includes(reason || "")) throw invalid("El proveedor alcanzó el límite de salida. La respuesta está incompleta y no se guardó como evaluación. No se reintentó automáticamente.", "response_truncated");
+    if (["content_filter", "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT"].includes(reason || "")) throw invalid("El proveedor bloqueó la respuesta. No se guardó como evaluación.", "response_blocked");
+    return parseReview(text, payload);
+  } catch (error) { throw Object.assign(error instanceof Error ? error : new Error("Respuesta inválida."), { diagnostics }); }
+}

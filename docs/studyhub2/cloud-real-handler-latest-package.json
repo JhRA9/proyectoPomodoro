@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-29T16:44:38.7776401Z",
+  "files": [
+    {
+      "file": "areaSuggestions.ts",
+      "sha256": "dd7ee310d22665cddd305d945735cfa253fa4fd051c3295bbe3045f48340394c"
+    },
+    {
+      "file": "index.ts",
+      "sha256": "5bd183fb4b716cc6e3db042ac5c970957f03885d76c18c889dfd970687a3a6d3"
+    },
+    {
+      "file": "requestStore.ts",
+      "sha256": "358abd311f89736f8e22b5515d55b6deb409258f9e965bf61665d3e8f89a6689"
+    },
+    {
+      "file": "validation.ts",
+      "sha256": "62a9f0c2f50e942df012612db51fcf890ead827d455c3801ef0718cea1978cbf"
+    }
+  ],
+  "syntheticTransport": false,
+  "preserveProviderSecrets": true,
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "deployed": true
+}

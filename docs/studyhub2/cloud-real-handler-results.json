@@ -1,0 +1,33 @@
+{
+  "at": "2026-10-29T16:45:44.289Z",
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "transport": "real deployed handler; no fetch replacement",
+  "checks": [
+    "missing authentication",
+    "forged JWT",
+    "unsupported method",
+    "invalid JSON",
+    "unknown action",
+    "invalid provider",
+    "empty rubric",
+    "oversized input",
+    "areas without context",
+    "private code blocked",
+    "authenticated configuration check"
+  ],
+  "passed": 11,
+  "inferenceRequests": 0,
+  "providerConfiguration": {
+    "gemini": {
+      "configured": true,
+      "model": "gemini-3.8-flash",
+      "connection": "success"
+    },
+    "cloudflare": {
+      "configured": true,
+      "model": "@cf/openai/gpt-oss-120b",
+      "connection": "success"
+    }
+  },
+  "cleanup": "only this synthetic account removed"
+}

@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-29T13:23:03.016Z",
+  "http": 200,
+  "status": "completed",
+  "providers": {
+    "gemini": {
+      "configured": true,
+      "model": "gemini-3.8-flash",
+      "connection": "success"
+    },
+    "cloudflare": {
+      "configured": true,
+      "model": "@cf/openai/gpt-oss-120b",
+      "connection": "success"
+    }
+  }
+}

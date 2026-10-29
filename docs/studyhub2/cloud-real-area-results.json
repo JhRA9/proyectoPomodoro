@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-29T16:41:59.372Z",
+  "projectRef": "https://uchsgbpohigrtwpsxlnx.supabase.co",
+  "parentRun": "5c1e88ee-ce1b-4336-90e7-8beec567a931",
+  "maximumAdditionalInferences": 1,
+  "inferenceRequests": 1,
+  "checks": [],
+  "status": "failed",
+  "response": {
+    "status": "error",
+    "message": "No se pudo obtener la propuesta de Gemini. Puedes continuar manualmente."
+  },
+  "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'error'\n- 'completed'\n",
+  "cleanup": "synthetic account and dependent rows removed"
+}

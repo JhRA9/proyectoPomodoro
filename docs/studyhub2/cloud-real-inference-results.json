@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-29T16:38:56.618Z",
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "plan": {
+    "inferences": 3,
+    "gemini": 2,
+    "cloudflare": 1,
+    "automaticRetries": 0,
+    "profile": "fast",
+    "maxOutputTokens": [
+      1800,
+      1800,
+      2500
+    ],
+    "syntheticDataOnly": true
+  },
+  "run": "5c1e88ee-ce1b-4336-90e7-8beec567a931",
+  "inferenceSlotsReserved": 3,
+  "status": "blocked-or-failed",
+  "checks": [],
+  "requestsSent": 1,
+  "evaluation": {
+    "status": "partial",
+    "provider": "both",
+    "profile": "fast",
+    "results": [],
+    "errors": [
+      {
+        "provider": "gemini",
+        "code": "connection_error",
+        "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+      },
+      {
+        "provider": "cloudflare",
+        "code": "invalid_response",
+        "message": "El proveedor devolvió JSON inválido."
+      }
+    ],
+    "promptVersion": "studyhub-evaluate-v1",
+    "requestId": "real:5c1e88ee-ce1b-4336-90e7-8beec567a931:evaluate"
+  },
+  "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'partial'\n- 'completed'\n",
+  "cleanup": "synthetic account and dependent rows removed"
+}

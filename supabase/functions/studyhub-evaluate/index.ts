@@ -1,6 +1,6 @@
 import { claimEvaluation, authenticateRequest } from "./requestStore.ts";
 import { suggestAreas } from "./areaSuggestions.ts";
-import { readPayload, validateEvaluationInput, parseReview } from "./validation.ts";
+import { readPayload, validateEvaluationInput, parseProviderReview } from "./validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +54,7 @@ function classifyError(status: number, message: string) {
   if (status === 401 || status === 403) return "permission_error";
   if (status === 404) return "model_unavailable";
   if (status === 429) return "quota_exhausted";
+  if (status === 503) return "provider_busy";
   return message.toLowerCase().includes("quota") ? "quota_exhausted" : "connection_error";
 }
 
@@ -87,8 +88,7 @@ async function gemini(payload: any, profile: keyof typeof LIMITS) {
   const body = await response.json();
   if (!response.ok) throw Object.assign(new Error(body?.error?.message || "Gemini rechazó la solicitud."), { code: classifyError(response.status, body?.error?.message || ""), status: response.status });
   const text = body.candidates?.[0]?.content?.parts?.map((part: any) => part.text || "").join("");
-  if (!text) throw Object.assign(new Error("Gemini no devolvió una evaluación."), { code: "invalid_response" });
-  return { ...parseReview(text, payload), provider: "gemini", model: body.modelVersion || model, latencyMs: Date.now() - started, usage: { inputTokens: body.usageMetadata?.promptTokenCount ?? null, outputTokens: body.usageMetadata?.candidatesTokenCount ?? null, reasoningTokens: body.usageMetadata?.thoughtsTokenCount ?? null, neurons: null } };
+  return { ...parseProviderReview(text, payload, { finishReason: body.candidates?.[0]?.finishReason, inputTokens: body.usageMetadata?.promptTokenCount, outputTokens: body.usageMetadata?.candidatesTokenCount, reasoningTokens: body.usageMetadata?.thoughtsTokenCount }), provider: "gemini", model: body.modelVersion || model, latencyMs: Date.now() - started, usage: { inputTokens: body.usageMetadata?.promptTokenCount ?? null, outputTokens: body.usageMetadata?.candidatesTokenCount ?? null, reasoningTokens: body.usageMetadata?.thoughtsTokenCount ?? null, neurons: null } };
 }
 
 async function cloudflare(payload: any, profile: keyof typeof LIMITS) {
@@ -105,8 +105,7 @@ async function cloudflare(payload: any, profile: keyof typeof LIMITS) {
   const body = await response.json();
   if (!response.ok) throw Object.assign(new Error(body?.errors?.[0]?.message || body?.error?.message || "Cloudflare rechazó la solicitud."), { code: classifyError(response.status, JSON.stringify(body)), status: response.status });
   const text = body.choices?.[0]?.message?.content;
-  if (!text) throw Object.assign(new Error("Cloudflare no devolvió una evaluación."), { code: "invalid_response" });
-  return { ...parseReview(text, payload), provider: "cloudflare", model, latencyMs: Date.now() - started, usage: { inputTokens: body.usage?.prompt_tokens ?? null, outputTokens: body.usage?.completion_tokens ?? null, reasoningTokens: body.usage?.completion_tokens_details?.reasoning_tokens ?? null, neurons: body.usage?.neurons ?? null } };
+  return { ...parseProviderReview(text, payload, { finishReason: body.choices?.[0]?.finish_reason, inputTokens: body.usage?.prompt_tokens, outputTokens: body.usage?.completion_tokens, reasoningTokens: body.usage?.completion_tokens_details?.reasoning_tokens }), provider: "cloudflare", model, latencyMs: Date.now() - started, usage: { inputTokens: body.usage?.prompt_tokens ?? null, outputTokens: body.usage?.completion_tokens ?? null, reasoningTokens: body.usage?.completion_tokens_details?.reasoning_tokens ?? null, neurons: body.usage?.neurons ?? null } };
 }
 
 Deno.serve(async (request) => {
@@ -128,7 +127,7 @@ Deno.serve(async (request) => {
       if (record.cached) return json(record.cached);
       let result;
       try { result = await suggestAreas(input); }
-      catch (error) { result = { status: "error", message: error instanceof Error ? error.message : "No se pudo obtener la propuesta. Continúa manualmente." }; }
+      catch (error) { result = { status: "error", code: error?.code || "connection_error", ...(Number.isInteger(error?.status) ? { providerHttpStatus: error.status } : {}), message: error instanceof Error ? error.message : "No se pudo obtener la propuesta. Continúa manualmente." }; }
       await record.finish(result);
       return json(result);
     }
@@ -150,7 +149,7 @@ Deno.serve(async (request) => {
     const calls = names.map((name) => name === "cloudflare" ? cloudflare(payload, profile) : gemini(payload, profile));
     const settled = await Promise.allSettled(calls);
     const results = settled.flatMap((item) => item.status === "fulfilled" ? [item.value] : []);
-    const errors = settled.flatMap((item, index) => item.status === "rejected" ? [{ provider: names[index], code: item.reason?.code || "connection_error", message: item.reason instanceof Error ? item.reason.message : "No se pudo completar la evaluación." }] : []);
+    const errors = settled.flatMap((item, index) => item.status === "rejected" ? [{ provider: names[index], code: item.reason?.code || "connection_error", message: item.reason instanceof Error ? item.reason.message : "No se pudo completar la evaluación.", ...(item.reason?.diagnostics ? { diagnostics: item.reason.diagnostics } : {}) }] : []);
     const response = { status: errors.length ? "partial" : "completed", provider, profile, results, errors, promptVersion: "studyhub-evaluate-v1", requestId: payload.requestId || null };
     if (requestRecord) await requestRecord.finish(response);
     if (!results.length && !requestRecord) throw Object.assign(new Error(errors[0]?.message || "Ningún proveedor respondió."), { code: errors[0]?.code || "connection_error" });

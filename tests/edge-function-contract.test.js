@@ -54,6 +54,28 @@ describe("edge handler integration with simulated provider network",()=>{
     expect(await(await send({action:"suggest-areas",requestVersion:2,requestId:"area:test",context:"CSS",history:[100],email:"private"})).json()).toEqual(cached);
     expect(transport).not.toHaveBeenCalled();expect(store.claim.mock.calls[0][1]).not.toHaveProperty("history");expect(store.claim.mock.calls[0][1]).not.toHaveProperty("email");
   });
+  it("records truncation and usage without accepting or repairing incomplete output",async()=>{
+    transport.mockResolvedValue(Response.json({choices:[{finish_reason:"length",message:{content:'{"summary":"unfinished private content'}}],usage:{prompt_tokens:123,completion_tokens:1800,completion_tokens_details:{reasoning_tokens:900}}}));
+    const result=await(await send({...payload,provider:"cloudflare"})).json();
+    expect(result.results).toEqual([]);expect(result.errors[0]).toMatchObject({code:"response_truncated",diagnostics:{finishReason:"length",inputTokens:123,outputTokens:1800,reasoningTokens:900}});
+    expect(JSON.stringify(result)).not.toContain('unfinished private content');expect(transport).toHaveBeenCalledTimes(1);
+  });
+  it("keeps malformed JSON distinct from truncation and does not retry a busy provider",async()=>{
+    transport.mockImplementation(async url=>url.includes('googleapis')?Response.json({error:{message:'High demand'}},{status:503}):Response.json({choices:[{finish_reason:'stop',message:{content:'not json'}}],usage:{completion_tokens:10}}));
+    const result=await(await send(payload)).json();
+    expect(result.errors).toMatchObject([{provider:'gemini',code:'provider_busy'},{provider:'cloudflare',code:'invalid_response',diagnostics:{finishReason:'stop',outputTokens:10}}]);
+    expect(result.results).toEqual([]);expect(transport).toHaveBeenCalledTimes(2);
+  });
+  it("rejects a blocked provider response even if the text is valid JSON",async()=>{
+    transport.mockResolvedValue(Response.json({candidates:[{finishReason:'SAFETY',content:{parts:[{text:JSON.stringify(review)}]}}]}));
+    const result=await(await send({...payload,provider:'gemini'})).json();expect(result.results).toEqual([]);expect(result.errors[0].code).toBe('response_blocked');
+  });
+  it("distinguishes area-service overload from quota without leaking provider body or retrying",async()=>{
+    transport.mockResolvedValue(Response.json({error:{message:'private provider body'}},{status:503}));
+    const result=await(await send({action:'suggest-areas',requestVersion:2,requestId:'area:busy',context:'Synthetic study context'})).json();
+    expect(result).toMatchObject({status:'error',code:'provider_busy',providerHttpStatus:503});expect(result.message).toContain('manualmente');
+    expect(JSON.stringify(result)).not.toContain('private provider body');expect(transport).toHaveBeenCalledTimes(1);expect(store.finish).toHaveBeenCalledTimes(1);
+  });
   it("does not send private code or unauthenticated requests",async()=>{
     expect((await send({...payload,privacy:"private"})).status).toBe(403);
     expect((await handler(new Request("http://localhost/test",{method:"POST",body:JSON.stringify(payload)}))).status).toBe(401);
