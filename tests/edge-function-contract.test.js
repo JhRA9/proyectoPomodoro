@@ -14,6 +14,36 @@ const payload={action:"evaluate",requestVersion:2,requestId:"test:both",provider
 const send=body=>handler(new Request("http://localhost/test",{method:"POST",headers:{Authorization:"Bearer synthetic","Content-Type":"application/json"},body:JSON.stringify(body)}));
 const review={summary:"Synthetic response",provisionalLevel:null,scores:[{criterionId:"correctness",score:2,justification:"Synthetic fixture"}],recommendations:[],strengths:[],weaknesses:[],demonstratedCompetencyIds:[],notDemonstratedCompetencyIds:[]};
 describe("edge handler integration with simulated provider network",()=>{
+  it('preserves a non-JSON HTTP failure and never exposes the raw body',async()=>{
+    transport.mockResolvedValue(new Response('<html>PRIVATE upstream diagnostic</html>',{status:503}));
+    const result=await(await send(payload)).json();
+    for(const error of result.errors)expect(error).toMatchObject({code:'provider_busy',providerHttpStatus:503});
+    expect(JSON.stringify(result)).not.toContain('PRIVATE');expect(transport).toHaveBeenCalledTimes(2);
+  });
+  it('distinguishes a provider contract error from a quota error',async()=>{
+    transport.mockResolvedValue(Response.json({error:{message:'Untrusted request details'}},{status:400}));
+    const result=await(await send({...payload,provider:'gemini'})).json();
+    expect(result.errors[0]).toMatchObject({code:'provider_contract_error',providerHttpStatus:400});
+    expect(JSON.stringify(result)).not.toContain('Untrusted request details');
+  });
+  it('rejects truncated area proposals even if the partial text parses',async()=>{
+    transport.mockResolvedValue(Response.json({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:JSON.stringify({areas:[{name:'Functions',description:'Synthetic',objectives:[]}]})}]}}],usageMetadata:{candidatesTokenCount:2500}}));
+    const result=await(await send({action:'suggest-areas',requestVersion:2,requestId:'area:truncated',context:'Synthetic'})).json();
+    expect(result).toMatchObject({status:'error',code:'response_truncated',diagnostics:{finishReason:'MAX_TOKENS',outputTokens:2500}});expect(result.areas).toBeUndefined();
+  });
+  it('parses only final Gemini text, not thought parts',async()=>{
+    transport.mockResolvedValue(Response.json({candidates:[{finishReason:'STOP',content:{parts:[{thought:true,text:'Private thought'},{text:JSON.stringify(review)}]}}]}));
+    const result=await(await send({...payload,provider:'gemini'})).json();expect(result.status).toBe('completed');expect(result.results[0].summary).toBe(review.summary);expect(JSON.stringify(result)).not.toContain('Private thought');
+  });
+  it('does not report model access for an empty successful catalog response',async()=>{
+    transport.mockResolvedValue(Response.json({success:true,result:[]}));
+    const result=await(await send({action:'check',provider:'cloudflare'})).json();expect(result.providers.cloudflare.connection).toBe('model_unavailable');
+  });
+  it('omits the deprecated temperature on the configured Gemini 3.8 model',async()=>{
+    transport.mockResolvedValue(Response.json({candidates:[{content:{parts:[{text:JSON.stringify(review)}]}}]}));
+    await send({...payload,provider:'gemini',models:{gemini:'gemini-3.8-flash'}});
+    const body=JSON.parse(transport.mock.calls[0][1].body);expect(body.generationConfig).not.toHaveProperty('temperature');expect(body.generationConfig.maxOutputTokens).toBe(3500);
+  });
   it("does not let legacy payloads bypass the account quota",async()=>{
     store.claim.mockRejectedValue(Object.assign(new Error("Quota exhausted"),{code:"quota_exhausted"}));
     expect((await send({...payload,requestVersion:1,requestId:undefined})).status).toBe(429);

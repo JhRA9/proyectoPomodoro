@@ -11,6 +11,8 @@ globalThis.fetch = async (input, init) => {
   if (url.origin === localOrigin) return nativeFetch(input, init);
   if (!["generativelanguage.googleapis.com", "api.cloudflare.com"].includes(url.hostname)) throw new Error("External network forbidden in synthetic staging");
   const body = String(init?.body || "");
+  if (!body && url.hostname === "generativelanguage.googleapis.com") return Response.json({name:"models/synthetic-gemini",supportedGenerationMethods:["generateContent"]});
+  if (!body && url.pathname.endsWith("/ai/models/search")) return Response.json({success:true,result:[{name:"synthetic-cloudflare"}]});
   await new Promise(resolve => setTimeout(resolve, body.includes("STAGING_SLOW") ? 1200 : 150));
   if (url.hostname === "api.cloudflare.com" && body.includes("STAGING_PARTIAL")) return Response.json({error:{message:"Synthetic quota"}}, {status:429});
   const areas = Boolean(body && JSON.parse(body).generationConfig?.responseJsonSchema?.properties?.areas);
