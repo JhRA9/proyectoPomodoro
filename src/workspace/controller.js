@@ -4,6 +4,7 @@ import { toLocalDateKey } from "../utils/time.js";
 import { normalizeForSearch } from "../utils/text.js";
 import { AreaSuggestionsController } from "./areaSuggestions.js";
 import { WorkspacePanels } from "./panels.js";
+import { PlanningController } from "../planning/controller.js";
 
 export class WorkspaceController {
   constructor(app, context = {}) {
@@ -18,6 +19,7 @@ export class WorkspaceController {
     this.lastPath = null;
     this.formCaptureSuppressed = false;
     this.areas = new AreaSuggestionsController(this);
+    this.planning = new PlanningController(this);
     this.panels = new WorkspacePanels(this);
     const now = new Date();
     Object.assign(app.ui, { workspaceV2: this.enabled, wsAgendaTab: "pending", wsAgendaProject: "all", wsCalendar: { year: now.getFullYear(), month: now.getMonth() }, wsRequests: {} });
@@ -85,6 +87,7 @@ export class WorkspaceController {
     this.lastPath = path; this.lastRoute = route; this.goingBack = false;
   }
   path(route) {
+    if (route.name === "plan") return `projects/${encodeURIComponent(route.projectId)}/plan`;
     if (route.name.startsWith("workspace-")) return route.name.slice(10);
     if (route.name === "completedProjects") return "completed";
     return `projects${route.projectId ? `/${encodeURIComponent(route.projectId)}` : ""}${route.name === "progress" ? "/progress" : route.taskId ? `/tasks/${encodeURIComponent(route.taskId)}` : ""}`;
@@ -108,6 +111,7 @@ export class WorkspaceController {
       this.app.router.navigate(this.enabled ? "home" : "projects"); this.app.render(); return true;
     }
     if (!this.enabled) return false;
+    if (await this.planning.action(action, target)) return true;
     if (await this.areas.action(action, target)) return true;
     const app = this.app, ui = app.ui, repo = app.repository, state = repo.getState();
     if (action === "recommendation-to-task") {
@@ -166,6 +170,7 @@ export class WorkspaceController {
   }
 
   async submit(form, data) {
+    if (this.enabled && await this.planning.submit(form, data)) return true;
     if (this.enabled && await this.areas.submit(form)) return true;
     if (!this.enabled || !form.matches("[data-workspace-draft]")) return false;
     const app = this.app, repo = app.repository;

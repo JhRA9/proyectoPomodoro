@@ -1,4 +1,5 @@
 import { createId } from "../utils/id.js";
+import { executePlan } from "../planning/engine.js";
 import { cleanMultilineText, cleanText, normalizeForSearch } from "../utils/text.js";
 import { normalizeLearningImages } from "../utils/learningImages.js";
 import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
@@ -89,6 +90,27 @@ export class StudyHubRepository {
 
   destroy() { this.unsubscribeExternal(); }
   getState() { return this.store.getState(); }
+
+  async planCommand(projectId, command, actor = "local") {
+    return this.commit((state) => {
+      const project = state.projects.find(p => p.id === projectId);
+      if (!project) throw new Error("El proyecto ya no existe.");
+      if (project.status === "completed") throw new Error("Reabre el proyecto para modificar su plan.");
+      const plans = state.projectPlans ??= [];
+      const index = plans.findIndex(p => p.projectId === projectId);
+      if (command.type === "create" && command.projectId !== projectId) throw new Error("Proyecto del plan incorrecto.");
+      const plan = executePlan(index < 0 ? null : plans[index], command, state, actor, this.clock().toISOString());
+      if (index < 0) plans.push(plan); else plans[index] = plan;
+      return plan;
+    });
+  }
+
+  async invalidatePlanFile(path, actor = "local") {
+    if (!(this.getState().projectPlans || []).some(p => p.versions.at(-1).content.evidence.some(e => e.file?.path === path))) return;
+    return this.commit(state => {
+      state.projectPlans = state.projectPlans.map(plan => !plan.versions.at(-1).content.evidence.some(e => e.file?.path === path) ? plan : executePlan(plan, {id:createId("plan-event"),type:"file-changed",expectedRevision:plan.revision,path,reason:"Se reemplazó el archivo; la evidencia anterior requiere nueva revisión."},state,actor,this.clock().toISOString()));
+    });
+  }
 
   async commit(mutator) {
     const job = this.commitTail.then(() => this.commitOne(mutator));
@@ -196,6 +218,7 @@ export class StudyHubRepository {
       const taskIds = new Set(state.tasks.filter((task) => task.projectId === projectId).map((task) => task.id));
       if (state.activeTimer && taskIds.has(state.activeTimer.taskId)) state.activeTimer = null;
       state.projects = state.projects.filter((project) => project.id !== projectId);
+      state.projectPlans = (state.projectPlans || []).filter(plan => plan.projectId !== projectId);
       state.tasks = state.tasks.filter((task) => !taskIds.has(task.id));
       state.focusSessions = state.focusSessions.filter((session) => !taskIds.has(session.taskId));
       state.learningEntries = state.learningEntries.filter((entry) => !taskIds.has(entry.taskId));
@@ -286,6 +309,11 @@ export class StudyHubRepository {
       state.tasks = state.tasks.filter((task) => task.id !== taskId);
       state.focusSessions = state.focusSessions.filter((session) => session.taskId !== taskId);
       state.learningEntries = state.learningEntries.filter((entry) => entry.taskId !== taskId);
+      state.projectPlans = (state.projectPlans || []).map(plan => {
+        const content = plan.versions.at(-1).content;
+        if (!content.items.some(i => i.taskId === taskId) && !content.evidence.some(e => e.file?.taskId === taskId)) return plan;
+        return executePlan(plan, { id:createId("plan-event"),type:"task-removed",taskId,expectedRevision:plan.revision }, state, plan.events.at(-1).actor, this.clock().toISOString());
+      });
       if (state.pendingCompletion?.taskId === taskId) state.pendingCompletion = null;
     });
   }

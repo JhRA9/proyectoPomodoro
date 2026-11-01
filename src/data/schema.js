@@ -2,6 +2,7 @@ import { addDaysKey, parseLocalDate, toLocalDateKey } from "../utils/time.js";
 import { MAX_LEARNING_IMAGES, isLearningImageDataUrl, normalizeLearningImages } from "../utils/learningImages.js";
 import { AI_PROFILES, AI_PROVIDERS, DEFAULT_RUBRIC, DELIVERABLE_STATUSES, HELP_LEVELS, PRIVACY_MODES, PROJECT_TYPES, VALIDATION_STATES, defaultEvaluationConfig } from "../evaluation/constants.js";
 import { validateAttempt } from "../evaluation/attempts.js";
+import { validatePlans } from "../planning/engine.js";
 
 export const SCHEMA_VERSION = 2;
 export const TASK_STATUSES = ["pending", "in_progress", "completed"];
@@ -33,6 +34,7 @@ export function createEmptyState(now = new Date()) {
     deliverables: [],
     aiRequests: [],
     weeklyReviews: [],
+    projectPlans: [],
     activeTimer: null,
     pendingCompletion: null,
   };
@@ -83,6 +85,7 @@ function isSafeId(value) {
 }
 
 export function validateState(candidate) {
+  validatePlans(candidate);
   assert(candidate && typeof candidate === "object", "La copia no contiene datos válidos.");
   assert(candidate.schemaVersion === SCHEMA_VERSION, `Versión de datos no compatible (${candidate.schemaVersion ?? "desconocida"}).`);
   assert(Array.isArray(candidate.projects) && Array.isArray(candidate.tasks), "Faltan proyectos o tareas.");
@@ -350,6 +353,7 @@ export function normalizeState(candidate) {
   state.deliverables = (Array.isArray(state.deliverables) ? state.deliverables : []).map((item) => ({ ...item, title: String(item.title || "").slice(0, 160), description: String(item.description || "").slice(0, 1200), status: DELIVERABLE_STATUSES.includes(item.status) ? item.status : "pending", dependencyIds: Array.isArray(item.dependencyIds) ? [...new Set(item.dependencyIds)] : [], blockingReason: String(item.blockingReason || "").slice(0, 800), weight: Number.isFinite(item.weight) && item.weight > 0 ? item.weight : null, dueDate: item.dueDate || null, verifiedAt: item.status === "verified" && isIsoTimestamp(item.verifiedAt) ? item.verifiedAt : null }));
   state.aiRequests = Array.isArray(state.aiRequests) ? state.aiRequests : [];
   state.weeklyReviews = Array.isArray(state.weeklyReviews) ? state.weeklyReviews : [];
+  state.projectPlans = state.projectPlans === undefined ? [] : state.projectPlans;
   validateState(state);
   return state;
 }

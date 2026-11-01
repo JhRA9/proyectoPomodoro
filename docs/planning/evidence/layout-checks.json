@@ -1,0 +1,244 @@
+{
+  "date": "2026-11-01",
+  "synthetic": true,
+  "device": "Chrome viewport override, CSS pixels measured",
+  "physicalMobile": false,
+  "screenReader": false,
+  "keyboard": {
+    "tabFocus": "Estructura",
+    "enterActivated": true
+  },
+  "checks": [
+    {
+      "requested": 320,
+      "view": "structure-form",
+      "documentWidth": 308,
+      "overflow": [],
+      "small": [],
+      "width": 320
+    },
+    {
+      "requested": 390,
+      "view": "structure-form",
+      "documentWidth": 378,
+      "overflow": [],
+      "small": [],
+      "width": 390
+    },
+    {
+      "requested": 740,
+      "view": "structure-form",
+      "documentWidth": 728,
+      "overflow": [],
+      "small": [],
+      "width": 740
+    },
+    {
+      "requested": 1024,
+      "view": "structure-form",
+      "documentWidth": 1012,
+      "overflow": [],
+      "small": [],
+      "width": 1024
+    },
+    {
+      "requested": 1440,
+      "view": "structure-form",
+      "documentWidth": 1428,
+      "overflow": [],
+      "small": [],
+      "width": 1440
+    },
+    {
+      "requested": 320,
+      "view": "summary",
+      "documentWidth": 308,
+      "overflow": [],
+      "width": 320
+    },
+    {
+      "requested": 390,
+      "view": "summary",
+      "documentWidth": 378,
+      "overflow": [],
+      "width": 390
+    },
+    {
+      "requested": 740,
+      "view": "summary",
+      "documentWidth": 728,
+      "overflow": [],
+      "width": 740
+    },
+    {
+      "requested": 1024,
+      "view": "summary",
+      "documentWidth": 1012,
+      "overflow": [],
+      "width": 1024
+    },
+    {
+      "requested": 1440,
+      "view": "summary",
+      "documentWidth": 1428,
+      "overflow": [],
+      "width": 1440
+    },
+    {
+      "requested": 320,
+      "view": "Dependencias",
+      "alerts": [],
+      "documentWidth": 308,
+      "heading": [
+        "Mapa de dependencias"
+      ],
+      "width": 320
+    },
+    {
+      "requested": 320,
+      "view": "Evidencias",
+      "alerts": [],
+      "documentWidth": 308,
+      "heading": [
+        "Medición ficticia QA"
+      ],
+      "width": 320
+    },
+    {
+      "requested": 320,
+      "view": "Conocimientos",
+      "alerts": [],
+      "documentWidth": 308,
+      "heading": [],
+      "width": 320
+    },
+    {
+      "requested": 320,
+      "view": "Riesgos",
+      "alerts": [],
+      "documentWidth": 308,
+      "heading": [],
+      "width": 320
+    },
+    {
+      "requested": 320,
+      "view": "Fuentes y decisiones",
+      "alerts": [],
+      "documentWidth": 308,
+      "heading": [],
+      "width": 320
+    },
+    {
+      "requested": 320,
+      "view": "Escenarios",
+      "alerts": [],
+      "documentWidth": 308,
+      "heading": [
+        "Escenario de calendario"
+      ],
+      "width": 320
+    },
+    {
+      "requested": 320,
+      "view": "Propuestas",
+      "alerts": [],
+      "documentWidth": 308,
+      "heading": [
+        "Propuestas de IA o humanas",
+        "Añadir Medición ficticia QA",
+        "Añadir Soporte ficticio con criterios verificables"
+      ],
+      "width": 320
+    },
+    {
+      "requested": 320,
+      "view": "Historial",
+      "alerts": [],
+      "documentWidth": 308,
+      "heading": [
+        "Versiones y métricas congeladas",
+        "Comparar versiones",
+        "Eventos inmutables"
+      ],
+      "width": 320
+    },
+    {
+      "requested": 1440,
+      "view": "Dependencias",
+      "alerts": [],
+      "documentWidth": 1428,
+      "heading": [
+        "Mapa de dependencias"
+      ],
+      "width": 1440
+    },
+    {
+      "requested": 1440,
+      "view": "Evidencias",
+      "alerts": [],
+      "documentWidth": 1428,
+      "heading": [
+        "Medición ficticia QA"
+      ],
+      "width": 1440
+    },
+    {
+      "requested": 1440,
+      "view": "Conocimientos",
+      "alerts": [],
+      "documentWidth": 1440,
+      "heading": [],
+      "width": 1440
+    },
+    {
+      "requested": 1440,
+      "view": "Riesgos",
+      "alerts": [],
+      "documentWidth": 1440,
+      "heading": [],
+      "width": 1440
+    },
+    {
+      "requested": 1440,
+      "view": "Fuentes y decisiones",
+      "alerts": [],
+      "documentWidth": 1428,
+      "heading": [],
+      "width": 1440
+    },
+    {
+      "requested": 1440,
+      "view": "Escenarios",
+      "alerts": [],
+      "documentWidth": 1428,
+      "heading": [
+        "Escenario de calendario"
+      ],
+      "width": 1440
+    },
+    {
+      "requested": 1440,
+      "view": "Propuestas",
+      "alerts": [],
+      "documentWidth": 1428,
+      "heading": [
+        "Propuestas de IA o humanas",
+        "Añadir Medición ficticia QA",
+        "Añadir Soporte ficticio con criterios verificables"
+      ],
+      "width": 1440
+    },
+    {
+      "requested": 1440,
+      "view": "Historial",
+      "alerts": [],
+      "documentWidth": 1428,
+      "heading": [
+        "Versiones y métricas congeladas",
+        "Comparar versiones",
+        "Eventos inmutables"
+      ],
+      "width": 1440
+    }
+  ]
+}

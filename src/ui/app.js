@@ -26,6 +26,8 @@ import { LearningDraftStore, normalizeLearningDraft } from "./learningDrafts.js"
 import { WorkspaceController } from "../workspace/controller.js";
 import { agendaView } from "../workspace/agenda.js";
 import { workspaceProgress } from "../workspace/progressView.js";
+import { planningView } from "../planning/view.js";
+import { planningCloudReady } from "../planning/controller.js";
 import { workspaceSidebar, workspaceHome, workspaceFocusList, workspaceResults, workspaceLearning, workspaceSettings } from "../workspace/views.js";
 
 const LAYOUT_STORAGE_PREFIX = "studyhub:layout:1";
@@ -399,7 +401,7 @@ export class StudyHubApp {
       queueMicrotask(() => this.router.navigate("projects"));
       return { route: { name: "projects" }, project: null, task: null };
     }
-    if (["project", "progress"].includes(route.name)) return { route, project, task: null };
+    if (["project", "progress", "plan"].includes(route.name)) return { route, project, task: null };
     const task = state.tasks.find((item) => item.id === route.taskId && item.projectId === project.id);
     if (!task) {
       queueMicrotask(() => this.router.navigate(`projects/${project.id}`));
@@ -427,6 +429,7 @@ export class StudyHubApp {
     let content = projectsView(state, this.ui);
     if (route.name === "completedProjects") content = completedProjectsView(state, this.ui);
     if (route.name === "project" && project) content = projectView(state, project, this.ui);
+    if (route.name === "plan" && project) content = v2 ? planningView(state, project, this.ui, {cloud:Boolean(this.account), cloudReady:planningCloudReady()}) : projectView(state, project, this.ui);
     if (route.name === "progress" && project) content = progressView(state, project, this.ui, { aiEnabled: Boolean(this.aiEvaluator) });
     if (route.name === "focus" && project && task) content = focusView(state, project, task, this.ui);
     if (v2) {
@@ -1030,6 +1033,7 @@ export class StudyHubApp {
         for (const file of files) {
           try {
             const result = await this.fileStore.upload(taskId, file);
+            if (result.kind === "updated" && this.repository.invalidatePlanFile) await this.repository.invalidatePlanFile(this.fileStore.path(taskId, result.file.key), this.account?.id || "local");
             if (result.kind === "updated") replaced += 1;
             else uploaded += 1;
           } catch (error) {
@@ -1095,6 +1099,7 @@ export class StudyHubApp {
     event.preventDefault();
     const form = event.target;
     const data = Object.fromEntries(new FormData(form).entries());
+    if (form.dataset.form?.startsWith("plan-")) data.planIntent = event.submitter?.value || "approve";
     if (await this.workspaceV2.submit(form, data)) return;
     if (form.dataset.form === "task") data.repeatDaily = form.elements?.repeatDaily?.checked ? "daily" : data.repeatDaily === "daily" ? "daily" : "";
     if (form.dataset.form === "timer-config") {
@@ -1309,7 +1314,7 @@ export async function createApp(root, dependencies = {}) {
     if (!userId) throw new Error("La sesión de StudyHub no contiene un usuario válido.");
     const gateway = dependencies.gatewayFactory
       ? dependencies.gatewayFactory({ client, userId })
-      : new SupabaseStateGateway({ client, userId, useSnapshotRpc: import.meta.env.VITE_STUDYHUB_SNAPSHOT_RPC === "true" });
+      : new SupabaseStateGateway({ client, userId, useSnapshotRpc: import.meta.env.VITE_STUDYHUB_SNAPSHOT_RPC === "true", planningReady:planningCloudReady() });
     const adapter = dependencies.cloudAdapterFactory
       ? dependencies.cloudAdapterFactory({ gateway, userId })
       : new CloudStorageAdapter({ gateway, userId });

@@ -63,11 +63,13 @@ function sameSnapshot(a, b) {
 }
 
 export class SupabaseStateGateway {
-  constructor({ client, userId, useSnapshotRpc = false }) {
+  constructor({ client, userId, useSnapshotRpc = false, planningReady = false }) {
     if (!client || !userId) throw new Error("La conexión cloud no está configurada.");
     this.client = client;
     this.userId = userId;
     this.useSnapshotRpc = useSnapshotRpc;
+    this.planningReady = planningReady;
+    this.savedPlans = [];
   }
 
   async load() {
@@ -78,6 +80,7 @@ export class SupabaseStateGateway {
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;
+    this.savedPlans = structuredClone(data.state.projectPlans || []);
     return {
       data: normalizeState(data.state),
       revision: Number(data.revision ?? data.state?.revision ?? 0),
@@ -88,6 +91,17 @@ export class SupabaseStateGateway {
   async save(nextState, { expectedRevision } = {}) {
     if (expectedRevision !== null && !Number.isSafeInteger(expectedRevision)) throw conflictError();
     const state = normalizeState(nextState);
+    if (!sameSnapshot(state.projectPlans || [], this.savedPlans)) {
+      if (!this.planningReady) throw Object.assign(new Error("Falta habilitar la validación segura del plan en este entorno. La copia local se conserva."), {status:403});
+      const {data,error} = await this.client.functions.invoke("studyhub-plan", {body:{state,expectedRevision}});
+      if (error || !data?.data) {
+        let details=data;try { details=error?.context?.json ? await error.context.json() : data; } catch { /* A network error has no JSON response. */ }
+        if (details?.code === "STUDYHUB_CONFLICT" || error?.context?.status === 409) throw conflictError();
+        throw Object.assign(new Error(details?.message || "No se pudo guardar el plan. Conserva la copia local."), {status:error?.context?.status || 503});
+      }
+      this.savedPlans = structuredClone(state.projectPlans || []);
+      return {data:normalizeState(data.data.state),revision:data.data.revision,updatedAt:data.data.updated_at};
+    }
     if (expectedRevision !== null && state.revision <= expectedRevision) {
       const remote = await this.load();
       if (remote && sameSnapshot(remote.data, state)) return remote;
