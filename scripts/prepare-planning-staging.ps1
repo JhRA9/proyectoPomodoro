@@ -13,7 +13,7 @@ foreach ($relative in @('src','supabase/functions/studyhub-plan','supabase/funct
   Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force
 }
 Write-Output 'Fuentes preparadas en .tmp/studyhub-staging. No se modifico ninguna base de datos.'
-Write-Output 'Con Docker listo: supabase start --workdir .tmp/studyhub-staging'
-Write-Output 'Luego: supabase migration up --local --workdir .tmp/studyhub-staging'
-Write-Output 'Luego: supabase functions serve studyhub-plan --workdir .tmp/studyhub-staging'
-Write-Output 'En otra consola: scripts/run-planning-staging.ps1'
+Write-Output 'Con Docker listo y los servicios desechables existentes: node scripts/run-planning-local.mjs'
+Write-Output 'Este ejecutor evita el antiguo bloqueo de montajes/docker cp, aplica SQL local y ensaya la reversion.'
+Write-Output 'Si faltan servicios: scripts/prepare-local-staging.ps1; despues repetir el ejecutor Node.'
+Write-Output 'No mezclar migration up con esta copia desechable: el ensayo aplica SQL directamente, sin modificar el registro de migraciones de la CLI.'

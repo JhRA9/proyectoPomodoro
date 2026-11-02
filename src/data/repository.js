@@ -1,5 +1,5 @@
 import { createId } from "../utils/id.js";
-import { executePlan } from "../planning/engine.js";
+import { executePlan, validatePlanningTransition } from "../planning/engine.js";
 import { cleanMultilineText, cleanText, normalizeForSearch } from "../utils/text.js";
 import { normalizeLearningImages } from "../utils/learningImages.js";
 import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
@@ -303,7 +303,7 @@ export class StudyHubRepository {
     });
   }
 
-  async deleteTask(taskId) {
+  async deleteTask(taskId, actor = "local") {
     return this.commit((state) => {
       if (state.activeTimer?.taskId === taskId) state.activeTimer = null;
       state.tasks = state.tasks.filter((task) => task.id !== taskId);
@@ -312,7 +312,7 @@ export class StudyHubRepository {
       state.projectPlans = (state.projectPlans || []).map(plan => {
         const content = plan.versions.at(-1).content;
         if (!content.items.some(i => i.taskId === taskId) && !content.evidence.some(e => e.file?.taskId === taskId)) return plan;
-        return executePlan(plan, { id:createId("plan-event"),type:"task-removed",taskId,expectedRevision:plan.revision }, state, plan.events.at(-1).actor, this.clock().toISOString());
+        return executePlan(plan, { id:createId("plan-event"),type:"task-removed",taskId,expectedRevision:plan.revision }, state, actor, this.clock().toISOString());
       });
       if (state.pendingCompletion?.taskId === taskId) state.pendingCompletion = null;
     });
@@ -861,13 +861,18 @@ export class StudyHubRepository {
   async importEnvelope(envelope) {
     assertBackupEnvelope(envelope);
     const next = prepareImportedState(envelope.data, this.clock());
+    if (this.adapter.userId) validatePlanningTransition(this.getState(), next, this.adapter.userId);
     await this.adapter.save(next);
     this.store.setState(next);
   }
 
   async replaceFromMigration(candidate) {
     const next = prepareImportedState(candidate, this.clock());
-    await this.adapter.save(next);
+    // Preserve local attribution. Importing an archive is not evidence that the
+    // authenticated account performed the historical actions.
+    if (this.adapter.userId) validatePlanningTransition(this.getState(), next, this.adapter.userId);
+    const result = await this.adapter.save(next);
+    if (result?.synced === false) throw result.error || new Error("La migración no se ha sincronizado. La copia local se conserva; vuelve a intentarlo al recuperar la conexión.");
     this.adapter.acknowledgeMigration?.("migrated");
     this.store.setState(next);
     return next;

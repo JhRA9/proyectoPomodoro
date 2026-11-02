@@ -42,7 +42,7 @@ describe("limpieza de adjuntos", () => {
     const { app, repository, fileStore } = setup();
     app.ui.confirm = { type: "delete-task", id: "task-a" };
     await app.confirmAction();
-    expect(repository.deleteTask).toHaveBeenCalledWith("task-a");
+    expect(repository.deleteTask).toHaveBeenCalledWith("task-a", "local");
     expect(fileStore.queueCleanup).toHaveBeenCalledWith(["task-a"]);
     expect(fileStore.flushCleanup).not.toHaveBeenCalled();
   });
@@ -54,7 +54,7 @@ describe("limpieza de adjuntos", () => {
 
     await app.confirmAction();
 
-    expect(repository.deleteTask).toHaveBeenCalledWith("task-a");
+    expect(repository.deleteTask).toHaveBeenCalledWith("task-a", "local");
     expect(fileStore.queueCleanup).toHaveBeenCalledWith(["task-a"]);
     expect(router.navigate).toHaveBeenCalledWith("projects/project-a");
     expect(app.ui.confirm).toBeNull();

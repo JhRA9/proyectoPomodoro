@@ -17,6 +17,13 @@ export function blankContent(brief = {}) {
   return { brief: { objective: '', scope: '', constraints: '', done: '', availability: null, assumptions: '', ...brief }, ...Object.fromEntries(COLLECTIONS.map(k => [k, []])) };
 }
 export function currentContent(plan) { return plan.versions.at(-1).content; }
+export function planningCapacity(plan) {
+  const serialized = JSON.stringify(plan);
+  return { events: plan.events.length, versions: plan.versions.length,
+    codeUnits: serialized.length, utf8Bytes: new TextEncoder().encode(serialized).byteLength,
+    eventLimit: 500, codeUnitLimit: 3000000,
+    nearLimit: plan.events.length >= 400 || serialized.length >= 2400000 };
+}
 function hasCycle(edges, ids) {
   const visiting = new Set(), seen = new Set();
   const visit = n => { if (visiting.has(n)) return true; if (seen.has(n)) return false; visiting.add(n); if (edges.filter(e => e[0] === n).some(e => visit(e[1]))) return true; visiting.delete(n); seen.add(n); return false; };
@@ -189,7 +196,7 @@ export function executePlan(previous, command, state, actor, at) {
     } else throw new Error('Comando del plan no admitido.');
   }
   plan.revision++;plan.events.push({id:command.id,revision:plan.revision,version:plan.activeVersion,actor,at,type:command.type,command:clone(command)});
-  need(plan.events.length<=500&&JSON.stringify(plan).length<=3000000,'El plan alcanzó el límite de historial. Exporta una copia antes de continuar.');return plan;
+  need(plan.events.length<=500&&JSON.stringify(plan).length<=3000000,'El plan alcanzó el límite de historial. El cambio no se guardó y la historia se conserva. Exportar una copia no libera capacidad; se necesita ampliar el almacenamiento.');return plan;
 }
 export function validatePlans(state) {
   const plans=state?.projectPlans ?? [];need(Array.isArray(plans)&&plans.length<=100,'Colección de planes inválida.');need(new Set(plans.map(p=>p.projectId)).size===plans.length,'Solo un plan por proyecto.');need(new Set(plans.map(p=>p.id)).size===plans.length,'Identificador de plan duplicado.');
@@ -208,7 +215,7 @@ export function validatePlanningTransition(previous, next, actor) {
     const old=before.find(x=>x.id===p.id);need(!old||old.projectId===p.projectId,'El plan no puede cambiar de propietario o proyecto.');
     need(!old||canonical(p.events.slice(0,old.events.length))===canonical(old.events),'El historial no se puede reescribir.');
     let rebuilt=old?clone(old):null;
-    for(const event of p.events.slice(old?.events.length||0)) { need(event.actor===actor,'Autor no autorizado.');rebuilt=executePlan(rebuilt,event.command,next,actor,event.at); }
+    for(const event of p.events.slice(old?.events.length||0)) { need(event.actor===actor,'Autor no autorizado. El historial local o de otra cuenta no se puede atribuir a esta sesión. Conserva la copia original; su importación necesita un registro explícito de procedencia.');rebuilt=executePlan(rebuilt,event.command,next,actor,event.at); }
     need(canonical(rebuilt)===canonical(p),'El estado no corresponde a sus comandos auditados.');
     for(const e of currentContent(p).evidence) if(e.file) need(e.file.path.startsWith(actor+'/'),'Archivo de otra cuenta.');
   }

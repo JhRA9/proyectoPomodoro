@@ -1,0 +1,46 @@
+{
+  "at": "2026-11-01T22:22:54.974Z",
+  "status": "passed",
+  "providerRequests": 0,
+  "syntheticOnly": true,
+  "checks": [
+    "Auth y creación por handler real",
+    "RLS lectura entre cuentas",
+    "RLS escritura ajena no modifica filas",
+    "Otra cuenta no puede reproducir eventos ajenos",
+    "Trigger rechaza escrituras directas",
+    "Cliente antiguo no altera referencias conservando el JSON del plan",
+    "RPC privilegiado no accesible al cliente",
+    "Dos escrituras simultáneas: una gana, otra recibe conflicto",
+    "Lectura del segundo cliente conserva historia exacta",
+    "Storage privado entre cuentas",
+    "Evidencia privada versionada y verificación humana",
+    "Sustituir archivo impide acreditar su versión anterior",
+    "Invalidación conserva historial y retira verificación actual",
+    "Restauración conserva eventos y exige revisar evidencia",
+    "Confirmación perdida no duplica comandos",
+    "Cliente antiguo no elimina y recrea el snapshot",
+    "Cola offline del plan con repositorio real",
+    "Recarga conserva conflicto y no sobrescribe otra sesión",
+    "Recuperación explícita conserva copia divergente",
+    "Segundo cliente recibe plan e historial reconciliados",
+    "Entregables anteriores y extensiones históricas intactos",
+    "Importación local sin procedencia y copia antigua rechazadas sin perder datos"
+  ],
+  "sqlMigration": {
+    "migration": "base-already-installed",
+    "consolidationGuard": "applied",
+    "snapshotsUnchanged": true
+  },
+  "sql": {
+    "sha256": "b415191378ed6179982b8767a2c7deec068d249a840242675af9d3f312ae0330",
+    "checks": [
+      "synthetic-row-SQL-backup",
+      "backup-sha256",
+      "access-revocation",
+      "client-privileges",
+      "SQL-data-restoration",
+      "transaction-rollback-preserves-all-rows-and-grants"
+    ]
+  }
+}

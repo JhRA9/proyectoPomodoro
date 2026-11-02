@@ -1,0 +1,32 @@
+[
+  {
+    "overflow": false,
+    "scroll": 308,
+    "smallControls": [],
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "scroll": 378,
+    "smallControls": [],
+    "width": 390
+  },
+  {
+    "overflow": false,
+    "scroll": 728,
+    "smallControls": [],
+    "width": 740
+  },
+  {
+    "overflow": false,
+    "scroll": 1012,
+    "smallControls": [],
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "scroll": 1428,
+    "smallControls": [],
+    "width": 1440
+  }
+]

@@ -1,5 +1,7 @@
 # Planificación Inteligente de Proyectos — entrega y verificación
 
+Actualización del 1 de noviembre: [consolidación técnica y pruebas reales de staging](StudyHub_Planificacion_Consolidacion.md). Este documento conserva el estado histórico de la primera entrega.
+
 1 de noviembre de 2026 · rama `feat/studyhub-2`.
 
 **Resultado: implementación manual lista para revisión local. Activación cloud bloqueada hasta ejecutar la nueva verificación con Supabase desechable. IA desactivada.** No hubo merge, push, publicación, cambios en producción ni inferencias reales.

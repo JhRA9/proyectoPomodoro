@@ -867,7 +867,7 @@ export class StudyHubApp {
         this.addToast("Proyecto eliminado.");
       } else if (current.type === "delete-task") {
         const task = this.repository.getState().tasks.find((item) => item.id === current.id);
-        await this.repository.deleteTask(current.id);
+        await this.repository.deleteTask(current.id, this.account?.id || "local");
         this.queueTaskFileCleanup([current.id]);
         this.clearLearningDraft(current.id);
         if (this.router.current().taskId === current.id) this.router.navigate(`projects/${task?.projectId ?? this.router.current().projectId}`);

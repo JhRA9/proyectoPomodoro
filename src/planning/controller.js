@@ -76,7 +76,11 @@ export class PlanningController {
       else if(kind==='restore')await this.run({type:'restore',expectedRevision,version:Number(d.version),reason:d.reason,confirm:form.elements.confirm.checked});
       else throw new Error('Acción desconocida.');
     });
-    if(success){this.workspace.drafts.clear(form);this.workspace.formCaptureSuppressed=true;this.workspace.focus=null;app.render();if(!['scenario','compare'].includes(kind)&&d.planIntent!=='preview')app.addToast('Cambio guardado. Las propuestas requieren aprobación explícita.');}
+    if(success){
+      if(d.planIntent==='preview')this.workspace.drafts.capture(form);else this.workspace.drafts.clear(form);
+      this.workspace.formCaptureSuppressed=true;this.workspace.focus=null;app.render();
+      if(!['scenario','compare'].includes(kind)&&d.planIntent!=='preview')app.addToast('Cambio guardado. Las propuestas requieren aprobación explícita.');
+    }
     return true;
   }
 }

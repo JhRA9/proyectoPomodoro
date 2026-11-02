@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-01",
+  "branch": "feat/studyhub-2",
+  "base": "a1cceae",
+  "tests": {
+    "passed": 276,
+    "failed": 0,
+    "files": 35,
+    "command": "npm test -- --reporter=json --outputFile=.tmp/planning-regression.json"
+  },
+  "build": {
+    "status": "passed",
+    "modules": 92,
+    "jsKB": 578.0,
+    "gzipKB": 161.76,
+    "warning": "Main chunk exceeds 500 kB"
+  },
+  "ui": {
+    "browser": "Chrome",
+    "origin": "http://127.0.0.1:5176",
+    "data": "local synthetic fixture only",
+    "checks": [
+      "risk draft survives reload including selection",
+      "risk proposal preview shows advance 100 to 0 before approval",
+      "approval invalidates current verification and preserves v5 history",
+      "stale JSON import recovers only after explicit rebase of draft",
+      "partial approval retains reason and selection after preview",
+      "only first of two synthetic sources applied",
+      "history contains v1 to v7 and original local actors"
+    ],
+    "responsiveScope": "History view at measured CSS widths 320 390 740 1024 1440; no overflow or visible plan buttons links summaries under 44 px",
+    "physicalMobile": "not-run",
+    "screenReader": "not-run",
+    "slowNetwork": "not-run"
+  },
+  "restrictions": {
+    "inferences": 0,
+    "push": false,
+    "merge": false,
+    "deployment": false,
+    "productionAccess": false,
+    "mainUnchanged": "4210809303a0dad2825c3bde2324196eda5992a4"
+  }
+}

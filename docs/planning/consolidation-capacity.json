@@ -1,0 +1,29 @@
+{
+  "syntheticOnly": true,
+  "items": 300,
+  "dependencies": 299,
+  "scenarioRows": 300,
+  "populated": {
+    "events": 13,
+    "versions": 7,
+    "codeUnits": 1509840,
+    "utf8Bytes": 1518535,
+    "eventLimit": 500,
+    "codeUnitLimit": 3000000,
+    "nearLimit": false
+  },
+  "acceptedChanges": 7,
+  "final": {
+    "events": 20,
+    "versions": 14,
+    "codeUnits": 2955614,
+    "utf8Bytes": 2972709,
+    "eventLimit": 500,
+    "codeUnitLimit": 3000000,
+    "nearLimit": true
+  },
+  "limitMessage": "El plan alcanzó el límite de historial. El cambio no se guardó y la historia se conserva. Exportar una copia no libera capacidad; se necesita ampliar el almacenamiento.",
+  "rejectedChangePreservedHistory": true,
+  "replayMs": 1635,
+  "totalMs": 5384
+}

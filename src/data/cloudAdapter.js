@@ -91,7 +91,9 @@ export class SupabaseStateGateway {
   async save(nextState, { expectedRevision } = {}) {
     if (expectedRevision !== null && !Number.isSafeInteger(expectedRevision)) throw conflictError();
     const state = normalizeState(nextState);
-    if (!sameSnapshot(state.projectPlans || [], this.savedPlans)) {
+    // Old clients can break references while leaving the plan itself unchanged.
+    // Every snapshot with plans (including their removal) needs server validation.
+    if (state.projectPlans?.length || this.savedPlans.length) {
       if (!this.planningReady) throw Object.assign(new Error("Falta habilitar la validación segura del plan en este entorno. La copia local se conserva."), {status:403});
       const {data,error} = await this.client.functions.invoke("studyhub-plan", {body:{state,expectedRevision}});
       if (error || !data?.data) {

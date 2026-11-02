@@ -43,4 +43,11 @@ describe('planning authenticated server contract',()=>{
     expect((await gateway.save(f.state,{expectedRevision:null})).data.projectPlans).toEqual(f.state.projectPlans);expect(client.from).not.toHaveBeenCalled();
     f.add('items',f.item());client.functions.invoke.mockResolvedValue({data:null,error:{context:{status:409,json:async()=>({code:'STUDYHUB_CONFLICT'})}}});await expect(gateway.save(f.state,{expectedRevision:1})).rejects.toMatchObject({code:'STUDYHUB_CONFLICT'});
   });
+  it('validates task and project writes even when plan JSON is unchanged',async()=>{
+    const f=planningFixture(),client={functions:{invoke:vi.fn(async()=>({data:{data:{state:f.state,revision:f.state.revision}},error:null}))},from:vi.fn()};
+    const gateway=new SupabaseStateGateway({client,userId:f.actor,planningReady:true});gateway.savedPlans=structuredClone(f.state.projectPlans);
+    f.state.tasks[0].title='Edición normal';f.state.revision++;
+    await gateway.save(f.state,{expectedRevision:f.state.revision-1});
+    expect(client.functions.invoke).toHaveBeenCalledOnce();expect(client.from).not.toHaveBeenCalled();
+  });
 });
