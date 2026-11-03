@@ -1,0 +1,23 @@
+{
+  "at": "2026-11-03T15:42:14.7493425Z",
+  "base": "6b05e18",
+  "files": 44,
+  "passed": 310,
+  "failed": 0,
+  "pending": 0,
+  "success": true,
+  "build": {
+    "warning": "chunk >500 kB",
+    "modules": 101,
+    "gzipKB": 185.14,
+    "jsKB": 654.03
+  },
+  "npmAudit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  }
+}

@@ -25,19 +25,54 @@ export function reviewSelection(state,projectId,options={}){
   const project=state.projects.find(p=>p.id===projectId);if(!project)throw new Error('Proyecto ausente.');
   const plan=state.projectPlans.find(p=>p.projectId===projectId);if(!plan)throw new Error('Crea primero el plan.');
   const content=currentContent(plan),all=new Map(content.items.map(i=>[i.id,i])),ids=new Set(),context=new Set();
-  if(options.itemId){if(!all.has(options.itemId))throw new Error('Elemento de otro proyecto.');ids.add(options.itemId);let changed;do{changed=false;for(const i of all.values())if(ids.has(i.parentId)&&!ids.has(i.id)){ids.add(i.id);changed=true;}}while(changed);}
-  else for(const id of all.keys())ids.add(id);
-  let changed;do{changed=false;for(const id of [...ids,...context]){const parent=all.get(id)?.parentId;if(parent&&!ids.has(parent)&&!context.has(parent)){context.add(parent);changed=true;}for(const d of content.dependencies.filter(d=>d.to===id))if(!ids.has(d.from)&&!context.has(d.from)){context.add(d.from);changed=true;}}}while(changed);
+  if(options.itemId){
+    if(!all.has(options.itemId))throw new Error('Elemento de otro proyecto.');
+    const children=new Map(),prerequisites=new Map();
+    const link=(map,key,id)=>{if(!map.has(key))map.set(key,[]);map.get(key).push(id);};
+    for(const item of all.values())if(item.parentId){
+      link(children,item.parentId,item.id);
+      link(prerequisites,item.id,item.parentId);
+    }
+    for(const dep of content.dependencies)link(prerequisites,dep.to,dep.from);
+    // Set iteration visits new entries once, even when informational edges cycle.
+    ids.add(options.itemId);
+    for(const id of ids)for(const child of children.get(id)||[])ids.add(child);
+    const related=new Set(ids);
+    for(const id of related)for(const prior of prerequisites.get(id)||[]){
+      if(!ids.has(prior)){context.add(prior);related.add(prior);}
+    }
+  }else for(const id of all.keys())ids.add(id);
   const selected=new Set([...ids,...context]),inPeriod=value=>(!options.from||String(value||'').slice(0,10)>=options.from)&&(!options.to||String(value||'').slice(0,10)<=options.to);
   const tasks=state.tasks.filter(t=>t.projectId===projectId&&(!options.itemId||content.items.some(i=>selected.has(i.id)&&i.taskId===t.id))),taskIds=new Set(tasks.map(t=>t.id));
-  const exercises=state.exercises.filter(x=>x.projectId===projectId&&(!options.itemId||x.itemIds?.some(id=>selected.has(id))));
+  const scoped=Boolean(options.itemId||options.from||options.to);
+  const matchesItem=row=>!options.itemId||row.itemIds?.some(id=>selected.has(id));
+  const exercises=state.exercises.filter(x=>x.projectId===projectId).flatMap(x=>{
+    if(!scoped)return [x];
+    if(!x.submissionVersions)return matchesItem(x)&&inPeriod(x.updatedAt||x.createdAt)?[x]:[];
+    const kept=x.submissionVersions.filter(v=>matchesItem(v.payload)&&inPeriod(v.at));
+    if(!kept.length)return [];
+    return [{...kept.at(-1).payload,id:x.id,projectId,submissionVersions:kept}];
+  });
   const exerciseIds=new Set(exercises.map(x=>x.id));
   const versions=exercises.flatMap(x=>(x.submissionVersions||[]).filter(v=>inPeriod(v.at)));
-  const files=[...new Map(versions.flatMap(v=>v.payload.files||[]).map(f=>[f.path,f])).values()];
+  const files=[...new Map(versions.flatMap(v=>v.payload.files||[]).map(f=>[f.path,{...f}])).values()];
   const selectedContent={...content,items:content.items.filter(i=>selected.has(i.id)),dependencies:content.dependencies.filter(d=>selected.has(d.from)&&selected.has(d.to)),evidence:content.evidence.filter(e=>selected.has(e.itemId)),risks:content.risks.filter(r=>r.targetIds.some(id=>selected.has(id)))};
+  if(options.itemId){
+    const sourceIds=new Set([...selectedContent.evidence,...selectedContent.dependencies].map(x=>x.sourceId).filter(Boolean));
+    selectedContent.sources=content.sources.filter(s=>sourceIds.has(s.id));
+    selectedContent.facts=content.facts.filter(f=>f.sourceIds.some(id=>sourceIds.has(id)));
+    selectedContent.decisions=content.decisions.filter(d=>d.sourceIds.some(id=>sourceIds.has(id)));
+  }
   // Partial exports are review packages, not replayable database backups.
-  const history=plan.events.filter(ev=>inPeriod(ev.at)).map(ev=>options.itemId?{id:ev.id,type:ev.type,at:ev.at,actor:ev.actor,version:ev.version,reason:ev.command.reason||'',operations:ev.command.proposal?.operations?.filter(op=>selected.has(op.targetId))||[]}:ev);
-  return {project,plan,files,raw:{format:'studyhub-project-review/1',project:{...project,evaluationConfig:options.includeAcademic?project.evaluationConfig:undefined},selection:{from:options.from||null,to:options.to||null,itemId:options.itemId||null},contextIds:[...context],metrics:planMetrics(content),content:selectedContent,tasks,categories:(state.categories||[]).filter(c=>project.categoryId===c.id||tasks.some(t=>t.categoryId===c.id)),deliveryStages:options.itemId?[]:(state.deliveryStages||[]).filter(x=>x.projectId===projectId),deliverables:options.itemId?[]:(state.deliverables||[]).filter(x=>x.projectId===projectId),sessions:state.focusSessions.filter(s=>taskIds.has(s.taskId)&&inPeriod(s.endedAt)),learnings:state.learningEntries.filter(l=>l.projectId===projectId&&taskIds.has(l.taskId)&&inPeriod(l.createdAt)),competencies:options.includeAcademic?state.competencies.filter(c=>c.projectId===projectId):[],exercises:exercises.map(x=>({...x,submissionVersions:x.submissionVersions?.filter(v=>inPeriod(v.at))})),evaluations:options.includeAcademic?state.evaluations.filter(a=>a.projectId===projectId&&(!options.itemId||exerciseIds.has(a.targetId))&&inPeriod(a.createdAt)):[],evidence:state.evidence.filter(e=>e.projectId===projectId&&(!options.itemId||exerciseIds.has(e.targetId))&&inPeriod(e.createdAt)),history,archive:options.itemId||options.from||options.to?null:{plan,weeklyReviews:project.weeklyReviews||[]}}};
+  const history=plan.events.filter(ev=>inPeriod(ev.at)).flatMap(ev=>{
+    if(!options.itemId)return [ev];
+    const command=ev.command;
+    const proposal=command.proposal||plan.proposals.find(p=>p.id===command.proposalId);
+    const operations=(proposal?.operations||[]).filter(op=>selected.has(op.targetId));
+    if(!operations.length&&!selected.has(command.itemId)&&!selectedContent.evidence.some(e=>e.id===command.evidenceId))return [];
+    return [{id:ev.id,type:ev.type,at:ev.at,actor:ev.actor,version:ev.version,operations}];
+  });
+  return {project,plan,files,raw:{format:'studyhub-project-review/1',project:{...project,...(scoped?{weeklyReviews:undefined}:{}),evaluationConfig:options.includeAcademic?project.evaluationConfig:undefined},selection:{from:options.from||null,to:options.to||null,itemId:options.itemId||null},contextIds:[...context],metrics:planMetrics(content),content:selectedContent,tasks,categories:(state.categories||[]).filter(c=>project.categoryId===c.id||tasks.some(t=>t.categoryId===c.id)),deliveryStages:options.itemId?[]:(state.deliveryStages||[]).filter(x=>x.projectId===projectId),deliverables:options.itemId?[]:(state.deliverables||[]).filter(x=>x.projectId===projectId),sessions:state.focusSessions.filter(s=>taskIds.has(s.taskId)&&inPeriod(s.endedAt)),learnings:state.learningEntries.filter(l=>l.projectId===projectId&&taskIds.has(l.taskId)&&inPeriod(l.createdAt)),competencies:options.includeAcademic?state.competencies.filter(c=>c.projectId===projectId):[],exercises:exercises.map(x=>({...x,submissionVersions:x.submissionVersions?.filter(v=>inPeriod(v.at))})),evaluations:options.includeAcademic?state.evaluations.filter(a=>a.projectId===projectId&&(!options.itemId||exerciseIds.has(a.targetId))&&inPeriod(a.createdAt)):[],evidence:state.evidence.filter(e=>e.projectId===projectId&&(!options.itemId||exerciseIds.has(e.targetId))&&inPeriod(e.createdAt)),history,archive:options.itemId||options.from||options.to?null:{plan,weeklyReviews:project.weeklyReviews||[]}}};
 }
 const crcTable=Uint32Array.from({length:256},(_,n)=>{for(let j=0;j<8;j++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
 function crc32(bytes){let crc=0xffffffff;for(const byte of bytes)crc=crcTable[(crc^byte)&255]^(crc>>>8);return (crc^0xffffffff)>>>0;}
@@ -63,35 +98,71 @@ async function reviewInventory(state,projectId,options,fileStore){
     for(const task of selected.raw.tasks){
       try{for(const file of await fileStore.list(task.id,{versions:true})){
         const path=fileStore.path(task.id,file.key);
+        const day=file.updatedAt?.slice(0,10);
+        const referenced=selected.raw.content.evidence.some(e=>e.file?.path===path);
+        if(!referenced&&((options.from&&(!day||day<options.from))||(options.to&&(!day||day>options.to))))continue;
         if(!selected.files.some(f=>f.path===path))selected.files.push({...file,taskId:task.id,path,version:file.updatedAt,representation:'legacy-upload-not-versioned'});
       }}catch{omissions.push({path:task.id,reason:'No se pudo enumerar los adjuntos de la tarea'});}
+    }
+    const referencedEvidence=selected.raw.archive ? selected.plan.versions.flatMap(v=>v.content?.evidence??v.delta?.evidence?.rows??[]) : selected.raw.content.evidence;
+    const checkedVersions=new Set();
+    for(const evidence of referencedEvidence){
+      if(!evidence.file)continue;
+      const key=JSON.stringify([evidence.file.path,evidence.file.version]);
+      if(checkedVersions.has(key))continue;
+      checkedVersions.add(key);
+      const original=selected.files.find(f=>f.path===evidence.file.path);
+      const expected=evidence.file.version;
+      if(!original||(original.version!==expected&&Date.parse(original.version)!==Date.parse(expected))){
+        omissions.push({path:evidence.file.path,reason:'La versión citada por la evidencia está ausente o fue reemplazada'});
+      }
     }
   }else if(!fileStore&&options.includeOriginals)omissions.push({path:'originals',reason:'No se pudo comprobar el inventario privado de archivos'});
   return {selected,omissions};
 }
+// Stable ordering also covers many files attached to a single task on the same day.
+function splitOriginals(files){
+  const parts=[[]];let used=0;
+  for(const file of [...files].sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0)){
+    if(!Number.isSafeInteger(file.sizeBytes)||file.sizeBytes<0||file.sizeBytes>20*1024*1024)throw new Error('Original inválido o superior a 20 MiB. No se generó el paquete (100 MiB por parte).');
+    if(used+file.sizeBytes>EXPORT_LIMIT){parts.push([]);used=0;}
+    parts.at(-1).push(file);used+=file.sizeBytes;
+  }
+  return parts;
+}
 export async function previewProjectReview(state,projectId,options={},fileStore=null){
   const {selected,omissions}=await reviewInventory(state,projectId,options,fileStore);
   const json=sanitized(selected.raw,options,omissions);
-  return {files:selected.files.length,originalBytes:options.includeOriginals?selected.files.reduce((sum,f)=>sum+f.sizeBytes,0):0,jsonBytes:encoder.encode(JSON.stringify(json,null,2)).length,omissions:omissions.length};
+  return {parts:options.includeOriginals?splitOriginals(selected.files).length:1,files:selected.files.length,originalBytes:options.includeOriginals?selected.files.reduce((sum,f)=>sum+f.sizeBytes,0):0,jsonBytes:encoder.encode(JSON.stringify(json,null,2)).length,omissions:omissions.length};
 }
 export async function exportProjectReview(state,projectId,options={},fileStore=null,signal){
   const {selected,omissions}=await reviewInventory(state,projectId,options,fileStore),entries=[];
-  if(options.includeOriginals&&selected.files.reduce((sum,f)=>sum+f.sizeBytes,0)>EXPORT_LIMIT)throw new Error('Los originales superan 100 MiB. No se exportó el proyecto: selecciona períodos u objetivos más pequeños. Ningún archivo se omitió silenciosamente.');
+  const parts=options.includeOriginals?splitOriginals(selected.files):[selected.files];
+  const part=options.part??1;
+  if(!Number.isSafeInteger(part)||part<1||part>parts.length)throw new Error(`Elige una parte entre 1 y ${parts.length}.`);
+  if(parts.length>1&&!options.part)throw new Error(`Los originales superan 100 MiB. Descarga las partes 1 a ${parts.length} manteniendo la misma selección.`);
+  const multipart=parts.length>1;
   signal?.throwIfAborted();
   if(!options.includeAcademic&&(state.competencies.some(c=>c.projectId===projectId)||state.evaluations.some(e=>e.projectId===projectId)))omissions.push({path:'academic',reason:'Datos académicos no seleccionados'});
   const data=sanitized(selected.raw,options,omissions);
-  const add=async(name,blob)=>{entries.push({name,blob,sha256:await sha256(blob),bytes:blob.size});};
+  const add=async(name,blob,digest)=>{entries.push({name,blob,sha256:digest??await sha256(blob),bytes:blob.size});};
   await add('project.json',new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
-  for(const file of selected.files){
+  for(const file of parts[part-1]){
     signal?.throwIfAborted();
     if(!options.includeOriginals){omissions.push({path:file.path,reason:'Original no autorizado para exportación'});continue;}
     if(!fileStore){omissions.push({path:file.path,reason:'Almacenamiento privado no disponible'});continue;}
-    try{signal?.throwIfAborted();const blob=file.sha256?await fileStore.downloadOriginal(file):await fileStore.download(file.taskId,file.key,file.version);if(blob.size!==file.sizeBytes)throw new Error('Tamaño distinto');file.sha256??=await sha256(blob);if(/text|json|javascript/.test(file.contentType)&&secret.test(await blob.text())){omissions.push({path:file.path,reason:'Original con posible secreto; no incluido'});continue;}await add(`originals/${file.taskId}/${file.key}`,blob);}catch{signal?.throwIfAborted();omissions.push({path:file.path,reason:'Original ausente, acceso rechazado o integridad inválida'});}
+    try{signal?.throwIfAborted();const blob=file.sha256?await fileStore.downloadOriginal(file):await fileStore.download(file.taskId,file.key,file.version);if(blob.size!==file.sizeBytes)throw new Error('Tamaño distinto');const digest=await sha256(blob);if(file.sha256&&file.sha256!==digest)throw new Error('Hash distinto');file.sha256=digest;if(/text|json|javascript/.test(file.contentType)&&secret.test(await blob.text())){omissions.push({path:file.path,reason:'Original con posible secreto; no incluido'});continue;}await add(`originals/${file.taskId}/${file.key}`,blob,digest);}catch{signal?.throwIfAborted();omissions.push({path:file.path,reason:'Original ausente, acceso rechazado o integridad inválida'});}
   }
-  const complete=omissions.length===0;
+  const complete=omissions.length===0&&!multipart;
   const summary=`# ${data.project.name}\n\nPaquete para revisión, no restauración automática.\n\nEstado: ${complete?'Completo dentro de la selección':'Con exclusiones; revisar manifest.json'}.\n\nAvance del proyecto: ${selected.raw.metrics.advance===null?'Sin calcular':selected.raw.metrics.advance+'%'} (alcance completo del proyecto; no recalculado sobre una selección parcial).\n\n${data.content.items.map(i=>`- ${i.title}: ${i.status}`).join('\n')}\n\n${omissions.map(o=>`- ${o.path}: ${o.reason}`).join('\n')}`;
   await add('context.md',new Blob([summary],{type:'text/markdown'}));
-  const manifest={format:'studyhub-project-review/1',exportedAt:new Date().toISOString(),projectId,selection:selected.raw.selection,completeWithinSelection:complete,includesAllProjectData:complete&&!options.itemId&&!options.from&&!options.to&&options.includeAcademic===true&&options.includeCode===true&&options.includeImages===true&&options.includeOriginals===true,files:entries.map(({name,sha256,bytes})=>({name,sha256,bytes})),originals:selected.files.map(({name,path,key,taskId,version,sha256,sizeBytes})=>({name,path,key,taskId,archivePath:`originals/${taskId}/${key}`,version,sha256,sizeBytes})),omissions,limitations:['No restaura cuentas ni permisos.','Las exclusiones aparecen explícitamente.','Límite de originales: 100 MiB; exportar por períodos u objetivos si se supera.']};
+  const manifest={format:'studyhub-project-review/1',exportedAt:new Date().toISOString(),projectId,selection:selected.raw.selection,completeWithinSelection:complete,includesAllProjectData:complete&&!options.itemId&&!options.from&&!options.to&&options.includeAcademic===true&&options.includeCode===true&&options.includeImages===true&&options.includeOriginals===true,files:entries.map(({name,sha256,bytes})=>({name,sha256,bytes})),originals:selected.files.map(({name,path,key,taskId,version,sha256,sizeBytes})=>({name,path,key,taskId,archivePath:`originals/${taskId}/${key}`,version,sha256,sizeBytes})),omissions,limitations:['No restaura cuentas ni permisos.','Las exclusiones aparecen explícitamente.','Límite de originales: 100 MiB; descargar todas las partes numeradas si se supera.']};
+  if(multipart){
+    const identity=parts.flat().map(f=>[f.path,f.sizeBytes,f.version]);
+    // Legacy hashes are learned when downloaded; use revision and version for a stable set identifier.
+    manifest.packageSet={part,total:parts.length,id:await sha256(JSON.stringify([projectId,state.revision,selected.raw.selection,options.includeAcademic,options.includeCode,options.includeImages,identity])),pathsByPart:parts.map(group=>group.map(f=>f.path))};
+    manifest.limitations.push('Parte de un conjunto. Reúne todas las partes con el mismo identificador y verifica sus hashes y exclusiones.');
+  }
   entries.push({name:'manifest.json',blob:new Blob([JSON.stringify(manifest,null,2)],{type:'application/json'})});
   return {blob:await zipStored(entries,signal),manifest};
 }

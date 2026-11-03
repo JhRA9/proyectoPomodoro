@@ -34,6 +34,6 @@ try {
 }catch(error){report.status='blocked';report.blocker=error.message;report.checks=error.checks||[];process.exitCode=1;}
 finally{
   try{if(edgeStarted)dockerLocal(['stop',planningContainer]);for(const name of started.reverse())dockerLocal(['stop','--time','10',name]);}catch(error){report.cleanup=error.message;process.exitCode=1;}
-  writeFileSync(new URL('../docs/planning/expansion-staging.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
+  writeFileSync(new URL(process.argv.includes('--release')?'../docs/planning/release-staging.json':'../docs/planning/expansion-staging.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify(report,null,2));
 }

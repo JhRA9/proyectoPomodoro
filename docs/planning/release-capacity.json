@@ -1,0 +1,86 @@
+{
+  "at": "2026-11-03T15:41:46.093Z",
+  "syntheticOnly": true,
+  "cases": [
+    {
+      "items": 300,
+      "dependencies": 299,
+      "repeatedChanges": 60,
+      "limit": null,
+      "populated": {
+        "events": 26,
+        "versions": 13,
+        "sizeUnit": "bytes UTF-8",
+        "used": 1057175,
+        "codeUnits": 1052429,
+        "utf8Bytes": 1057175,
+        "eventLimit": 20000,
+        "codeUnitLimit": 8388608,
+        "nearLimit": false
+      },
+      "final": {
+        "events": 86,
+        "versions": 73,
+        "sizeUnit": "bytes UTF-8",
+        "used": 1494546,
+        "codeUnits": 1487779,
+        "utf8Bytes": 1494546,
+        "eventLimit": 20000,
+        "codeUnitLimit": 8388608,
+        "nearLimit": false
+      },
+      "validateMs": 345,
+      "projectionMs": 6,
+      "exportMs": 131,
+      "zipBytes": 4147539,
+      "completeWithinSelection": true,
+      "heapDeltaBytes": -67904648,
+      "arrayBufferDeltaBytes": 12448406,
+      "totalMs": 8572
+    },
+    {
+      "items": 1000,
+      "dependencies": 999,
+      "repeatedChanges": 60,
+      "limit": null,
+      "populated": {
+        "events": 82,
+        "versions": 41,
+        "sizeUnit": "bytes UTF-8",
+        "used": 4230803,
+        "codeUnits": 4212707,
+        "utf8Bytes": 4230803,
+        "eventLimit": 20000,
+        "codeUnitLimit": 8388608,
+        "nearLimit": false
+      },
+      "final": {
+        "events": 142,
+        "versions": 101,
+        "sizeUnit": "bytes UTF-8",
+        "used": 6169682,
+        "codeUnits": 6142368,
+        "utf8Bytes": 6169682,
+        "eventLimit": 20000,
+        "codeUnitLimit": 8388608,
+        "nearLimit": false
+      },
+      "validateMs": 1401,
+      "projectionMs": 30,
+      "exportMs": 418,
+      "zipBytes": 16232214,
+      "completeWithinSelection": true,
+      "heapDeltaBytes": 16224112,
+      "arrayBufferDeltaBytes": 48696287,
+      "totalMs": 32890
+    }
+  ],
+  "export100MiB": {
+    "originals": 5,
+    "zipBytes": 104870425,
+    "durationMs": 1091,
+    "rssDeltaBytes": 72716288,
+    "arrayBufferDeltaBytes": 70732165,
+    "note": "Node measurement, not a browser/mobile peak-memory guarantee."
+  }
+}

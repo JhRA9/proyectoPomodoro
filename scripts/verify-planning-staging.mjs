@@ -1,4 +1,8 @@
+import {cloudStagingConfig} from './cloud-staging.mjs';
+import {rehearseCloudRestore} from './verify-planning-cloud-restore.mjs';
+import {writeFileSync} from 'node:fs';
 import {sha256} from '../src/utils/integrity.js';
+import {packPlanningState} from '../src/planning/transport.js';
 import {TaskFileStore} from '../src/cloud/taskFiles.js';
 import {saveDelivery} from '../src/planning/deliveries.js';
 import assert from 'node:assert/strict';
@@ -20,8 +24,10 @@ export function planningStagingConfig(env) {
 const checked=result=>{if(result.error)throw Error(`Fallo de staging (${result.error.code||result.error.status||'sin código'})`);return result.data;};
 export async function verifyPlanningStaging(config) {
   // Recheck the destination even if invoked as an imported function.
-  assert.equal(config.url,'http://127.0.0.1:54321');
-  assert.ok([config.url+'/functions/v1/studyhub-plan','http://127.0.0.1:54329/functions/v1/studyhub-plan'].includes(config.edge));
+  if(config.cloud){
+    const allowed=cloudStagingConfig(process.env);assert.equal(config.url,allowed.url);assert.equal(config.edge,allowed.url+'/functions/v1/studyhub-plan');assert.ok(!config.sqlRehearsal);
+  }else{assert.equal(config.url,'http://127.0.0.1:54321');
+  assert.ok([config.url+'/functions/v1/studyhub-plan','http://127.0.0.1:54329/functions/v1/studyhub-plan'].includes(config.edge));}
   const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}},admin=createClient(config.url,config.service,options);
   const users=[],clients=[],tokens=[],checks=[];let privatePath,secondClient;const originals=[];
   let lastResponse;
@@ -40,10 +46,11 @@ export async function verifyPlanningStaging(config) {
     f.state.deliveryStages=[{id:'legacy-stage',projectId:'synthetic-cube',title:'Etapa anterior',order:0,createdAt:f.at}];
     f.state.deliverables=[{id:'legacy-deliverable',projectId:'synthetic-cube',stageId:'legacy-stage',title:'Entregable anterior',description:'Fixture',status:'completed_unverified',dependencyIds:[],blockingReason:'',weight:3,dueDate:null,verifiedAt:null,createdAt:f.at,updatedAt:f.at}];
     const legacy=structuredClone(f.state);delete legacy.projectPlans;legacy.revision=0;
-    checked(await a.from('studyhub_states').insert({user_id:owner.id,state:legacy,revision:0}));
+    if(config.cloud){assert.equal(checked(await a.rpc('studyhub_save_snapshot',{p_state:legacy,p_expected_revision:null})).length,1);}else checked(await a.from('studyhub_states').insert({user_id:owner.id,state:legacy,revision:0}));
     assert.equal((await post(tokens[0],f.state,0)).status,200);pass('Auth y creación por handler real');
     assert.equal(checked(await b.from('studyhub_states').select().eq('user_id',owner.id)).length,0);pass('RLS lectura entre cuentas');
-    assert.equal(checked(await b.from('studyhub_states').update({state:legacy}).eq('user_id',owner.id).select()).length,0);pass('RLS escritura ajena no modifica filas');
+    const foreignUpdate=await b.from('studyhub_states').update({state:legacy}).eq('user_id',owner.id).select();
+    if(config.cloud)assert.equal(foreignUpdate.error?.code,'42501');else assert.equal(checked(foreignUpdate).length,0);pass('RLS escritura ajena no modifica filas');
     assert.notEqual((await post(tokens[1],f.state,null)).status,200);pass('Otra cuenta no puede reproducir eventos ajenos');
     const tampered=structuredClone(f.state);tampered.projectPlans[0].versions[0].content.brief.objective='Intrusión sintética';
     assert.ok((await a.from('studyhub_states').update({state:tampered}).eq('user_id',owner.id)).error);pass('Trigger rechaza escrituras directas');
@@ -106,17 +113,46 @@ export async function verifyPlanningStaging(config) {
     assert.equal((await post(tokens[1],imported,null)).status,200);const importedRead=checked(await b.rpc('studyhub_read_planned_snapshot',{}))[0];assert.deepEqual(importedRead.state.projectPlans[0].events[0].command.archive,archive);assert.equal(importedRead.state.projectPlans[0].versions[0].metrics.advance,0);pass('Importación explícita conserva autores locales y exige reverificación');
     const corrupt=structuredClone(imported);corrupt.projectPlans[0].events[0].command.sha256='0'.repeat(64);corrupt.revision++;
     assert.notEqual((await post(tokens[1],corrupt,imported.revision)).status,200);pass('Hash de archivo de origen manipulado rechazado');
+    if(config.cloud){
+      const snapshot=checked(await a.rpc('studyhub_read_planned_snapshot',{}))[0];
+      const state=structuredClone(snapshot.state);
+      const apply=command=>{
+        const old=state.projectPlans[0];
+        state.projectPlans=[executePlan(old,{id:randomUUID(),expectedRevision:old.revision,...command},state,owner.id,f.at)];
+        state.revision++;
+      };
+      apply({type:'adopt-catalog',confirm:true,reason:'Ensayo de conservación del catálogo'});
+      assert.deepEqual(state.projectPlans[0].catalog.original.deliverables,legacy.deliverables);
+      assert.equal((await post(tokens[0],await packPlanningState(state,snapshot.state.projectPlans),snapshot.revision)).status,200);
+      pass('Adopción explícita del catálogo conserva los registros anteriores en cloud');
+      for(let batch=0;batch<6;batch++){
+        const before=structuredClone(state), ids=Array.from({length:50},(_,i)=>'load-'+(batch*50+i));
+        const proposal={id:randomUUID(),title:'Escenario de software aislado',baseVersion:state.projectPlans[0].activeVersion,operations:ids.map(id=>f.op('items','add',id,f.item(id))),origin:'human',provider:'',model:'',questions:'',uncertainties:''};
+        apply({type:'propose',proposal});apply({type:'approve',proposalId:proposal.id,selectedIds:proposal.operations.map(op=>op.id),reason:'Fixture de capacidad'});
+        assert.equal((await post(tokens[0],await packPlanningState(state,before.projectPlans),before.revision)).status,200);
+      }
+      const restored=checked(await secondClient.rpc('studyhub_read_planned_snapshot',{}))[0];
+      assert.equal(canonical(restored.state),canonical(state));
+      pass('300 entregables adicionales por comandos CAS y rehidratación íntegra desde otro cliente');
+      rehearseCloudRestore(owner.id);
+      const afterRestore=checked(await a.rpc('studyhub_read_planned_snapshot',{}))[0];
+      assert.deepEqual(afterRestore,restored);
+      assert.equal(await sha256(await fileStore.downloadOriginal(original)),original.sha256);
+      pass('Restauración SQL transaccional de snapshot, cabecera, eventos y versiones. Tras rollback el snapshot y el original privado conservan su integridad');
+    }
     const sql=config.sqlRehearsal?verifyPlanningSql(owner.id):null;
     return {status:'passed',syntheticOnly:true,providerRequests:0,checks,sql};
   } catch(error){error.message+=` [after ${checks.length} checks: ${checks.at(-1)||"start"}; response ${lastResponse?.status}: ${lastResponse?.message||"none"}]`;error.checks=checks;throw error;
   } finally {
     // Synthetic account deletion releases its references before object cleanup.
-    for(const user of users)checked(await admin.auth.admin.deleteUser(user.id));
+    for(const user of users)checked(await admin.from('studyhub_states').delete().eq('user_id',user.id));
     if(originals.length)checked(await admin.storage.from('studyhub-task-files').remove(originals));
     if(privatePath)checked(await admin.storage.from('studyhub-task-files').remove([privatePath]));
+    for(const user of users)checked(await admin.auth.admin.deleteUser(user.id));
   }
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
-  try {const config=planningStagingConfig(process.env);console.log(JSON.stringify(await verifyPlanningStaging(config),null,2));}
+  try {const cloud=process.argv.includes('--enrolled-cloud');const config=cloud?cloudStagingConfig(process.env):planningStagingConfig(process.env);if(cloud)config.edge=config.url+'/functions/v1/studyhub-plan';
+    const result={at:new Date().toISOString(),environment:cloud?'isolated-cloud':'local',...await verifyPlanningStaging(config)};if(cloud)writeFileSync(new URL('../docs/planning/release-cloud.json',import.meta.url),JSON.stringify(result,null,2)+'\n'); console.log(JSON.stringify(result,null,2));}
   catch(error){console.error('Planificación staging NO aprobada: '+error.message);process.exitCode=1;}
 }

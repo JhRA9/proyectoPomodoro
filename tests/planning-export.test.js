@@ -9,6 +9,26 @@ async function unzip(blob){const bytes=new Uint8Array(await blob.arrayBuffer()),
   expect(view.getUint32(offset,true)).toBe(0x02014b50);expect(view.getUint32(bytes.length-22,true)).toBe(0x06054b50);return files;}
 const options={includeAcademic:true,includeCode:true,includeImages:true,includeOriginals:true};
 describe('review packages and original integrity',()=>{
+  it('limits a partial review to the requested submission versions and related sources',()=>{
+    const f=planningFixture();f.add('items',f.item());f.add('items',f.item('other'));
+    f.add('sources',{id:'unrelated',title:'Private context',content:'Different branch',origin:'own',version:'1',url:'',date:null});
+    f.state.exercises.push({id:'x',projectId:'synthetic-cube',itemIds:['other'],description:'Current private version',submissionVersions:[
+      {version:1,at:f.at,payload:{itemIds:['piece'],description:'Selected version'}},
+      {version:2,at:'2026-11-02T10:00:00Z',payload:{itemIds:['other'],description:'Current private version'}}
+    ]});
+    const result=reviewSelection(f.state,'synthetic-cube',{itemId:'piece',to:'2026-10-31'});
+    expect(result.raw.exercises[0].description).toBe('Selected version');
+    expect(result.raw.exercises[0].submissionVersions).toHaveLength(1);
+    expect(result.raw.content.sources).toEqual([]);
+    expect(JSON.stringify(result.raw.history)).not.toContain('Different branch');
+  });
+  it('declares a missing version referenced only in historical evidence',async()=>{
+    const f=planningFixture();f.add('items',f.item());const path='local/synthetic-task/proof';
+    f.add('evidence',f.evidence('proof','piece',{file:{path,taskId:'synthetic-task',version:f.at}}));
+    f.approve(f.propose([f.op('evidence','remove','proof',null)]));
+    const {manifest}=await exportProjectReview(f.state,'synthetic-cube',options,{list:async()=>[]});
+    expect(manifest.includesAllProjectData).toBe(false);expect(manifest.omissions.some(o=>o.path===path)).toBe(true);
+  });
   it('round trips unicode, hashes every content file and includes original bytes',async()=>{
     const f=planningFixture();f.add('items',f.item());const bytes=new Blob(['Documento sintético sin compresión ñ']);const key='a'.repeat(64);const file={name:'prueba.docx',taskId:'synthetic-task',key,path:'local/synthetic-task/'+key,sha256:await sha256(bytes),sizeBytes:bytes.size,contentType:'application/octet-stream',version:'v1'};
     f.state.exercises.push({id:'submission',projectId:'synthetic-cube',itemIds:['piece'],submissionVersions:[{version:1,at:f.at,payload:{files:[file]}}]});

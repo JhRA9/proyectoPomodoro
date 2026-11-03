@@ -27,4 +27,4 @@ const start=performance.now(),before=process.memoryUsage(),sample=new Blob([new 
 const result=await exportProjectReview(f.state,'synthetic-cube',{includeAcademic:true,includeCode:true,includeImages:true,includeOriginals:true},{list:async()=>originals,path:(task,key)=>`synthetic/${task}/${key}`,download:async()=>sample});
 assert.equal(result.manifest.completeWithinSelection,true);const after=process.memoryUsage();
 const report={at:new Date().toISOString(),syntheticOnly:true,cases,export100MiB:{originals:5,zipBytes:result.blob.size,durationMs:Math.round(performance.now()-start),rssDeltaBytes:after.rss-before.rss,arrayBufferDeltaBytes:after.arrayBuffers-before.arrayBuffers,note:'Node measurement, not a browser/mobile peak-memory guarantee.'}};
-writeFileSync(new URL('../docs/planning/expansion-capacity.json',import.meta.url),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
+writeFileSync(new URL(process.argv.includes('--release')?'../docs/planning/release-capacity.json':'../docs/planning/expansion-capacity.json',import.meta.url),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));

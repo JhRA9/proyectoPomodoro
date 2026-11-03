@@ -1,0 +1,51 @@
+{
+  "at": "2026-11-03T15:37:38.054Z",
+  "browser": "156.0.8078.79",
+  "compiledOffline": true,
+  "network390": "150 ms; 160000 bytes/s download; cold uncompressed localhost build",
+  "measurements": [
+    {
+      "width": 320,
+      "panels": 5,
+      "routes": 7,
+      "firstPlanMs": 249,
+      "slowNetwork": false
+    },
+    {
+      "width": 390,
+      "panels": 5,
+      "routes": 7,
+      "firstPlanMs": 5114,
+      "slowNetwork": true
+    },
+    {
+      "width": 740,
+      "panels": 5,
+      "routes": 7,
+      "firstPlanMs": 202,
+      "slowNetwork": false
+    },
+    {
+      "width": 1024,
+      "panels": 5,
+      "routes": 7,
+      "firstPlanMs": 208,
+      "slowNetwork": false
+    },
+    {
+      "width": 1440,
+      "panels": 5,
+      "routes": 7,
+      "firstPlanMs": 204,
+      "slowNetwork": false
+    }
+  ],
+  "software": {
+    "items": 1000,
+    "firstPlanMs": 428,
+    "treeMs": 146,
+    "usedJSHeapBytes": 9312004
+  },
+  "errors": [],
+  "external": []
+}

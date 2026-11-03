@@ -1,0 +1,11 @@
+{
+  "at": "2026-11-03T15:38:04.577Z",
+  "environment": "isolated-cloud",
+  "checks": [
+    "Restauración confirmada desde Chrome y comparación de cinco colecciones en cloud",
+    "Vista previa, importación y segundo intento sin duplicar proyectos",
+    "Adjuntar, reemplazar, recargar y descargar los bytes de la segunda versión"
+  ],
+  "cleanup": true,
+  "providerRequests": 0
+}

@@ -1,0 +1,37 @@
+{
+  "at": "2026-11-03T15:42:32.6791686Z",
+  "project": "StudyHub Staging V2",
+  "projectRef": "uchsgbpohigrtwpsxlnx",
+  "beforeSnapshots": 1,
+  "beforeFingerprint": "f53cf71454daf076e8fc63339c100101",
+  "after": {
+    "direct_insert": false,
+    "direct_planner": false,
+    "events": 0,
+    "fingerprint": "f53cf71454daf076e8fc63339c100101",
+    "heads": 0,
+    "run_users": 0,
+    "snapshots": 1,
+    "versions": 0
+  },
+  "noJwt": 401,
+  "invalidJwt": 403,
+  "migrations": [
+    {
+      "name": "202610310001_project_planning_guard.sql",
+      "sha256": "B5C37F564921FE08BE40E624D16F807F4E64470472C5D30AE8D2549966BFDE04"
+    },
+    {
+      "name": "202611010001_consolidate_planning_guard.sql",
+      "sha256": "0ECD5FBAA5846837EEAF29080A927553C8192D4EFBA19B1C5C78819CDDD45598"
+    },
+    {
+      "name": "202611020001_planning_history_v2.sql",
+      "sha256": "5607F664056457E1846765D323E0280B6893B21C60F9B843776103B0700793DE"
+    },
+    {
+      "name": "202611020002_planning_originals.sql",
+      "sha256": "025902D0469A2E315A6EAB794B8EC67EEDD66AEEEA1A6F5BD7B7E107D3F26307"
+    }
+  ]
+}

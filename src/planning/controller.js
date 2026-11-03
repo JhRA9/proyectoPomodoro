@@ -83,13 +83,13 @@ export class PlanningController {
       if(kind==='review-export'){
         this.exportController=new AbortController();
         if(d.from&&d.to&&d.from>d.to)throw new Error('El período termina antes de comenzar.');
-        const options={itemId:d.itemId||null,from:d.from||null,to:d.to||null,...Object.fromEntries(['includeAcademic','includeCode','includeImages','includeOriginals'].map(key=>[key,form.elements[key].checked]))};
+        const options={part:d.part?Number(d.part):null,itemId:d.itemId||null,from:d.from||null,to:d.to||null,...Object.fromEntries(['includeAcademic','includeCode','includeImages','includeOriginals'].map(key=>[key,form.elements[key].checked]))};
         if(d.planIntent==='preview-export'){
           const preview=await previewProjectReview(app.repository.getState(),form.dataset.projectId,options,app.fileStore);
-          app.addToast(`Selección actual · ${preview.files} archivos conocidos · ${(preview.originalBytes/1048576).toFixed(2)} MiB de originales · ${(preview.jsonBytes/1024).toFixed(1)} KiB de JSON · ${preview.omissions} exclusiones detectadas.`,'info');return;
+          app.addToast(`Selección actual · ${preview.files} archivos conocidos · ${preview.parts} parte(s) · ${(preview.originalBytes/1048576).toFixed(2)} MiB de originales · ${(preview.jsonBytes/1024).toFixed(1)} KiB de JSON · ${preview.omissions} exclusiones detectadas.`,'info');return;
         }
         const result=await exportProjectReview(app.repository.getState(),form.dataset.projectId,options,app.fileStore,this.exportController.signal);
-        app.downloadText(result.blob,'studyhub-proyecto-revision.zip','application/zip');app.addToast(result.manifest.completeWithinSelection?'Paquete generado dentro del alcance seleccionado.':'Paquete con exclusiones: consulta el manifiesto.','info');return;
+        const set=result.manifest.packageSet;app.downloadText(result.blob,set?`studyhub-${set.id.slice(0,12)}-${set.part}-de-${set.total}.zip`:'studyhub-proyecto-revision.zip','application/zip');app.addToast(result.manifest.completeWithinSelection?'Paquete generado dentro del alcance seleccionado.':'Paquete con exclusiones: consulta el manifiesto.','info');return;
       }
       if(kind==='delivery'){
         this.writable();form.dataset.requestId||=createId('submission-request');this.workspace.drafts.capture(form);const existing=app.repository.getState().exercises.find(x=>x.id===d.exerciseId&&x.projectId===form.dataset.projectId);let files=structuredClone(existing?.files||[]);
