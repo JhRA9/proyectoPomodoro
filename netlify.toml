@@ -5,6 +5,14 @@
 [build.environment]
   NODE_VERSION = "22"
 
+[context.production.environment]
+  VITE_WORKSPACE_V2_DEFAULT = "true"
+  VITE_STUDYHUB_SNAPSHOT_RPC = "true"
+  VITE_WORKSPACE_PLANNING_CLOUD_READY = "true"
+  VITE_WORKSPACE_AI_V2_READY = "false"
+  VITE_WORKSPACE_AREA_SUGGESTIONS_READY = "false"
+  VITE_STUDYHUB_MANUAL_ONLY = "true"
+
 [[headers]]
   for = "/assets/*"
   [headers.values]

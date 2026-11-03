@@ -111,6 +111,9 @@ Deno.serve(async (request) => {
   try {
     const authorization = request.headers.get("Authorization");
     if (!authorization?.startsWith("Bearer ")) return json({ status: "error", message: "Se requiere una sesión autenticada." }, 401);
+    if (Deno.env.get("STUDYHUB_AI_DISABLED") === "true") {
+      return json({ status: "error", code: "ai_disabled", message: "La IA está desactivada. Puedes continuar con la evaluación manual." }, 503);
+    }
     const payload = await readPayload(request);
     // Validate with Auth even on legacy/check calls; gateway JWT verification
     // alone is not portable across managed projects with asymmetric keys.

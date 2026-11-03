@@ -1,7 +1,11 @@
 export function workspaceEnabled(storage = globalThis.localStorage, search = globalThis.location?.search || "") {
   const value = new URLSearchParams(search).get("workspaceV2");
   if (value !== null) return value === "1" || value === "true";
-  try { return storage?.getItem("studyhub:workspaceV2") === "true"; } catch { return false; }
+  const defaultEnabled = import.meta.env?.VITE_WORKSPACE_V2_DEFAULT === "true";
+  try {
+    const saved = storage?.getItem("studyhub:workspaceV2");
+    return saved == null ? defaultEnabled : saved === "true";
+  } catch { return defaultEnabled; }
 }
 
 export class WorkspaceDrafts {

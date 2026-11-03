@@ -1326,7 +1326,7 @@ export async function createApp(root, dependencies = {}) {
       fileStore: dependencies.fileStoreFactory
         ? dependencies.fileStoreFactory({ client, userId })
         : new TaskFileStore(client, userId),
-      aiEvaluator: dependencies.aiEvaluator ?? new AiEvaluationClient(client),
+      aiEvaluator: dependencies.aiEvaluator ?? (import.meta.env.VITE_STUDYHUB_MANUAL_ONLY === "true" ? null : new AiEvaluationClient(client)),
     });
   };
 
