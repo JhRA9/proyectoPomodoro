@@ -65,6 +65,7 @@ function studiesPanel(state, project, aiEnabled) {
 }
 
 export function deliverablesPanel(state, project) {
+  if(state.projectPlans?.some(p=>p.projectId===project.id&&p.catalog?.mode==="plan")) return `<section class="progress-card"><h2>Entregables del proyecto</h2><p>El catálogo editable está en Plan. Los registros anteriores permanecen archivados con su estado original.</p><a class="primary-button" href="#/projects/${encodeURIComponent(project.id)}/plan">Abrir catálogo y avance verificable</a></section>`;
   const progress = deliverableProjectProgress(state, project.id);
   const dependencyOptions = progress.deliverables.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)}</option>`).join("");
   const targets = progress.deliverables.map((item) => ({ type: "deliverable", id: item.id, label: `Entregable · ${item.title}` }));

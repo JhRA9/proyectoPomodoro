@@ -31,9 +31,9 @@ try {
   }
   if(!ready)throw Error('El handler real no inició; comprobar únicamente los logs del contenedor studyhub-staging-plan.');
   Object.assign(report,await verifyPlanningStaging({...local,sqlRehearsal:true}));
-}catch(error){report.status='blocked';report.blocker=error.message;process.exitCode=1;}
+}catch(error){report.status='blocked';report.blocker=error.message;report.checks=error.checks||[];process.exitCode=1;}
 finally{
   try{if(edgeStarted)dockerLocal(['stop',planningContainer]);for(const name of started.reverse())dockerLocal(['stop','--time','10',name]);}catch(error){report.cleanup=error.message;process.exitCode=1;}
-  writeFileSync(new URL('../docs/planning/consolidation-staging.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
+  writeFileSync(new URL('../docs/planning/expansion-staging.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify(report,null,2));
 }

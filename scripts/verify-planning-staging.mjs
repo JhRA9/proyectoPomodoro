@@ -1,10 +1,13 @@
+import {sha256} from '../src/utils/integrity.js';
+import {TaskFileStore} from '../src/cloud/taskFiles.js';
+import {saveDelivery} from '../src/planning/deliveries.js';
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {createClient} from '@supabase/supabase-js';
 import {stagingConfig} from './verify-local-staging.mjs';
 import {planningFixture} from '../tests/helpers/planningFixture.js';
-import {currentContent,canonical} from '../src/planning/engine.js';
+import {currentContent,canonical,executePlan} from '../src/planning/engine.js';
 import {verifyPlanningSql} from './planning-staging-sql.mjs';
 import {verifyPlanningSync} from './planning-staging-sync.mjs';
 
@@ -20,9 +23,10 @@ export async function verifyPlanningStaging(config) {
   assert.equal(config.url,'http://127.0.0.1:54321');
   assert.ok([config.url+'/functions/v1/studyhub-plan','http://127.0.0.1:54329/functions/v1/studyhub-plan'].includes(config.edge));
   const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}},admin=createClient(config.url,config.service,options);
-  const users=[],clients=[],tokens=[],checks=[];let privatePath,secondClient;
+  const users=[],clients=[],tokens=[],checks=[];let privatePath,secondClient;const originals=[];
+  let lastResponse;
   const pass=name=>checks.push(name);
-  const post=(token,state,expectedRevision)=>fetch(config.edge,{method:'POST',headers:{Authorization:`Bearer ${token}`,apikey:config.anon,'Content-Type':'application/json'},body:JSON.stringify({state,expectedRevision}),signal:AbortSignal.timeout(20000)});
+  const post=async(token,state,expectedRevision)=>{const response=await fetch(config.edge,{method:'POST',headers:{Authorization:`Bearer ${token}`,apikey:config.anon,'Content-Type':'application/json'},body:JSON.stringify({state,expectedRevision}),signal:AbortSignal.timeout(20000)});lastResponse={status:response.status,message:response.status>=400?(await response.clone().json()).message:null};return response;};
   try {
     for(let n=0;n<2;n++) {
       const email=`planning-${randomUUID()}@example.test`,password=randomBytes(32).toString('hex');
@@ -46,7 +50,7 @@ export async function verifyPlanningStaging(config) {
     const dangling=structuredClone(f.state);dangling.tasks=[];
     assert.ok((await a.from('studyhub_states').update({state:dangling}).eq('user_id',owner.id)).error);pass('Cliente antiguo no altera referencias conservando el JSON del plan');
     assert.ok((await a.rpc('studyhub_save_planned_snapshot',{p_owner:owner.id,p_state:tampered,p_expected_revision:f.state.revision})).error);pass('RPC privilegiado no accesible al cliente');
-    const base=f.state.revision,old=structuredClone(f.state);f.add('items',f.item());
+    const base=f.state.revision,old=structuredClone(f.state);f.add('items',f.item('piece',{kind:'work'}));
     const results=await Promise.all([post(tokens[0],f.state,base),post(tokens[0],{...old,revision:old.revision+1,updatedAt:new Date().toISOString()},base)]);
     assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);pass('Dos escrituras simultáneas: una gana, otra recibe conflicto');
     let stored=checked(await a.from('studyhub_states').select().eq('user_id',owner.id).single());
@@ -78,11 +82,38 @@ export async function verifyPlanningStaging(config) {
     assert.equal((await post(tokens[0],planningFixture('local').state,finalRow.revision)).status,400);
     assert.equal((await post(tokens[0],f.state,finalRow.revision)).status,400);
     assert.equal(canonical(checked(await a.from('studyhub_states').select().eq('user_id',owner.id).single())),canonical(finalRow));pass('Importación local sin procedencia y copia antigua rechazadas sin perder datos');
+    const upgraded=structuredClone(finalRow.state);
+    upgraded.projectPlans[0]=executePlan(upgraded.projectPlans[0],{id:'upgrade-staging-v2',type:'upgrade-history',expectedRevision:upgraded.projectPlans[0].revision,confirm:true,reason:'Ensayo de migración local'},upgraded,owner.id,new Date().toISOString());upgraded.revision++;
+    assert.equal((await post(tokens[0],upgraded,finalRow.revision)).status,200);
+    const descriptor=checked(await a.from('studyhub_states').select().eq('user_id',owner.id).single());assert.equal(descriptor.state.projectPlans[0].externalHistory,true);assert.equal(descriptor.state.projectPlans[0].events,undefined);
+    const hydrated=checked(await a.rpc('studyhub_read_planned_snapshot',{}))[0];assert.equal(canonical(hydrated.state),canonical(upgraded));pass('Historial v2 normalizado recupera exactamente el snapshot');
+    assert.equal(checked(await b.from('studyhub_plan_events').select()).length,0);assert.ok((await b.rpc('studyhub_read_planned_snapshot',{p_owner:owner.id})).error);pass('RLS y RPC protegen historia v2 entre cuentas');
+    assert.ok((await a.from('studyhub_plan_events').delete().eq('user_id',owner.id)).error);pass('Eventos v2 sin escritura directa de cliente');
+    const lost=await post(tokens[0],upgraded,finalRow.revision);assert.equal(lost.status,200);pass('Recuperación idempotente tras normalizar historia');
+    checks.push(...await verifyPlanningSync(a,secondClient,owner.id,config.edge));
+    const fileStore=new TaskFileStore(a,owner.id);
+    const original=await fileStore.uploadOriginal('synthetic-task',new File(['original synthetic bytes'],'fixture.txt',{type:'text/plain'}));originals.push(original.path);
+    const duplicate=await fileStore.uploadOriginal('synthetic-task',new File(['original synthetic bytes'],'fixture.txt',{type:'text/plain'}));assert.equal(duplicate.path,original.path);pass('Original privado verifica bytes y deduplica contenido idéntico');
+    const blocked=await a.storage.from('studyhub-task-files').update(original.path,new Blob(['tampered']));assert.ok(blocked.error);assert.equal(await (await fileStore.downloadOriginal(original)).text(),'original synthetic bytes');pass('Storage impide sobrescribir un original inmutable');
+    const shared=checked(await a.rpc('studyhub_read_planned_snapshot',{}))[0];const sharedState=structuredClone(shared.state);
+    saveDelivery(sharedState,'synthetic-cube',{requestId:'staging-delivery',title:'Entrega de staging',purpose:'both',itemIds:['piece'],competencyIds:[],files:[original]},owner.id,new Date().toISOString());sharedState.revision++;
+    const response=await post(tokens[0],sharedState,shared.revision);assert.equal(response.status,200);pass('Entrega compartida y original validados por handler real');
+    await a.storage.from('studyhub-task-files').remove([original.path]);assert.equal(await (await fileStore.downloadOriginal(original)).text(),'original synthetic bytes');pass('Original referenciado no se elimina desde Storage');
+    assert.ok((await b.storage.from('studyhub-task-files').download(original.path)).error);pass('Original compartido permanece privado entre cuentas');
+    const localArchive=planningFixture('local');localArchive.add('items',localArchive.item());localArchive.verify();
+    const archive=structuredClone(localArchive.state.projectPlans[0]);
+    const imported=structuredClone(localArchive.state);imported.projectPlans=[executePlan(null,{id:'explicit-origin-import',type:'import-history',projectId:'synthetic-cube',archive,sha256:await sha256(canonical(archive)),confirm:true},imported,users[1].id,new Date().toISOString())];
+    assert.equal((await post(tokens[1],imported,null)).status,200);const importedRead=checked(await b.rpc('studyhub_read_planned_snapshot',{}))[0];assert.deepEqual(importedRead.state.projectPlans[0].events[0].command.archive,archive);assert.equal(importedRead.state.projectPlans[0].versions[0].metrics.advance,0);pass('Importación explícita conserva autores locales y exige reverificación');
+    const corrupt=structuredClone(imported);corrupt.projectPlans[0].events[0].command.sha256='0'.repeat(64);corrupt.revision++;
+    assert.notEqual((await post(tokens[1],corrupt,imported.revision)).status,200);pass('Hash de archivo de origen manipulado rechazado');
     const sql=config.sqlRehearsal?verifyPlanningSql(owner.id):null;
     return {status:'passed',syntheticOnly:true,providerRequests:0,checks,sql};
+  } catch(error){error.message+=` [after ${checks.length} checks: ${checks.at(-1)||"start"}; response ${lastResponse?.status}: ${lastResponse?.message||"none"}]`;error.checks=checks;throw error;
   } finally {
-    if(privatePath)checked(await admin.storage.from('studyhub-task-files').remove([privatePath]));
+    // Synthetic account deletion releases its references before object cleanup.
     for(const user of users)checked(await admin.auth.admin.deleteUser(user.id));
+    if(originals.length)checked(await admin.storage.from('studyhub-task-files').remove(originals));
+    if(privatePath)checked(await admin.storage.from('studyhub-task-files').remove([privatePath]));
   }
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){

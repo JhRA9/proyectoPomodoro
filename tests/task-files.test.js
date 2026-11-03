@@ -222,3 +222,34 @@ describe("migración de archivos", () => {
     expect(sql.match(/\(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text/g)).toHaveLength(5);
   });
 });
+
+
+describe("immutable originals",()=>{
+  it("keeps original versions by bytes while showing only the latest filename",async()=>{
+    const backend=fakeStorage(),store=new TaskFileStore(backend.client('owner'),'owner');
+    const a=await store.uploadOriginal('task',file('Tesis.docx','first'));
+    const same=await store.uploadOriginal('task',file('Tesis.docx','first'));
+    const b=await store.uploadOriginal('task',file('Tesis.docx','corrected'));
+    expect(same.key).toBe(a.key);expect(b.key).not.toBe(a.key);
+    expect(await store.list('task')).toHaveLength(1);expect(await store.list('task',{versions:true})).toHaveLength(2);
+    expect(await (await store.downloadOriginal(a)).text()).toBe('first');
+    expect(await (await store.downloadOriginal(b)).text()).toBe('corrected');
+    await expect(store.downloadOriginal({...a,sha256:b.sha256})).rejects.toThrow(/integridad/);
+    await expect(new TaskFileStore(backend.client('other'),'other').downloadOriginal(a)).rejects.toThrow(/Referencia/);
+  });
+});
+
+
+describe('original upload recovery',()=>{
+  it('recovers an interrupted delivery after reload without overwriting bytes or another account journal',async()=>{
+    const backend=fakeStorage(),storage=memoryStorage(),store=new TaskFileStore(backend.client('owner'),'owner',storage);
+    const original=await store.uploadOriginal('task',file('Tesis.docx','pending bytes'),{requestId:'submission-1'});
+    const reloaded=new TaskFileStore(backend.client('owner'),'owner',storage);
+    expect(await reloaded.recoverOriginals('submission-1')).toEqual([original]);
+    expect(new TaskFileStore(backend.client('other'),'other',storage).pendingOriginals()).toEqual([]);
+    await reloaded.uploadOriginal('task',file('Tesis.docx','pending bytes'),{requestId:'submission-1'});
+    expect(await reloaded.list('task',{versions:true})).toHaveLength(1);
+    reloaded.acknowledgeOriginals('submission-1');expect(reloaded.pendingOriginals()).toEqual([]);
+    expect(await (await reloaded.downloadOriginal(original)).text()).toBe('pending bytes');
+  });
+});

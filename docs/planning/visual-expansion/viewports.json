@@ -1,0 +1,177 @@
+[
+  {
+    "w": 320,
+    "label": "Resumen",
+    "available": 305,
+    "content": 305,
+    "section": "Resumen"
+  },
+  {
+    "w": 390,
+    "label": "Resumen",
+    "available": 375,
+    "content": 375,
+    "section": "Resumen"
+  },
+  {
+    "w": 740,
+    "label": "Resumen",
+    "available": 725,
+    "content": 725,
+    "section": "Resumen"
+  },
+  {
+    "w": 1024,
+    "label": "Resumen",
+    "available": 1009,
+    "content": 1009,
+    "section": "Resumen"
+  },
+  {
+    "w": 1440,
+    "label": "Resumen",
+    "available": 1425,
+    "content": 1425,
+    "section": "Resumen"
+  },
+  {
+    "w": 320,
+    "label": "Árbol",
+    "available": 305,
+    "content": 305,
+    "section": "Árbol"
+  },
+  {
+    "w": 390,
+    "label": "Árbol",
+    "available": 375,
+    "content": 375,
+    "section": "Árbol"
+  },
+  {
+    "w": 740,
+    "label": "Árbol",
+    "available": 725,
+    "content": 725,
+    "section": "Árbol"
+  },
+  {
+    "w": 1024,
+    "label": "Árbol",
+    "available": 1009,
+    "content": 1009,
+    "section": "Árbol"
+  },
+  {
+    "w": 1440,
+    "label": "Árbol",
+    "available": 1425,
+    "content": 1425,
+    "section": "Árbol"
+  },
+  {
+    "w": 320,
+    "label": "Entregas y evidencias",
+    "available": 305,
+    "content": 305,
+    "section": "Entregas y evidencias"
+  },
+  {
+    "w": 390,
+    "label": "Entregas y evidencias",
+    "available": 375,
+    "content": 375,
+    "section": "Entregas y evidencias"
+  },
+  {
+    "w": 740,
+    "label": "Entregas y evidencias",
+    "available": 725,
+    "content": 725,
+    "section": "Entregas y evidencias"
+  },
+  {
+    "w": 1024,
+    "label": "Entregas y evidencias",
+    "available": 1009,
+    "content": 1009,
+    "section": "Entregas y evidencias"
+  },
+  {
+    "w": 1440,
+    "label": "Entregas y evidencias",
+    "available": 1425,
+    "content": 1425,
+    "section": "Entregas y evidencias"
+  },
+  {
+    "w": 320,
+    "label": "Historial",
+    "available": 305,
+    "content": 305,
+    "section": "Historial"
+  },
+  {
+    "w": 390,
+    "label": "Historial",
+    "available": 375,
+    "content": 375,
+    "section": "Historial"
+  },
+  {
+    "w": 740,
+    "label": "Historial",
+    "available": 725,
+    "content": 725,
+    "section": "Historial"
+  },
+  {
+    "w": 1024,
+    "label": "Historial",
+    "available": 1009,
+    "content": 1009,
+    "section": "Historial"
+  },
+  {
+    "w": 1440,
+    "label": "Historial",
+    "available": 1425,
+    "content": 1425,
+    "section": "Historial"
+  },
+  {
+    "w": 320,
+    "label": "Asistente",
+    "available": 305,
+    "content": 305,
+    "section": "Asistente"
+  },
+  {
+    "w": 390,
+    "label": "Asistente",
+    "available": 375,
+    "content": 375,
+    "section": "Asistente"
+  },
+  {
+    "w": 740,
+    "label": "Asistente",
+    "available": 725,
+    "content": 725,
+    "section": "Asistente"
+  },
+  {
+    "w": 1024,
+    "label": "Asistente",
+    "available": 1009,
+    "content": 1009,
+    "section": "Asistente"
+  },
+  {
+    "w": 1440,
+    "label": "Asistente",
+    "available": 1425,
+    "content": 1425,
+    "section": "Asistente"
+  }
+]

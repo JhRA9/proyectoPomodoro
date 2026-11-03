@@ -62,9 +62,9 @@ describe("cloud conflict recovery",()=>{
     const one={...initial,revision:1},two={...initial,revision:2};
     const first=adapter.save(one);await vi.waitFor(()=>expect(finish).toBeTypeOf("function"));
     const second=adapter.save(two);finish();await first;
-    expect(adapter.readPending().data.revision).toBe(2);expect(adapter.getStatus().pending).toBe(true);
+    expect((await adapter.readPending()).data.revision).toBe(2);expect(adapter.getStatus().pending).toBe(true);
     await vi.waitFor(()=>expect(gateway.save).toHaveBeenCalledTimes(2));finish();await second;
-    expect(gateway.save.mock.calls[1][1]).toEqual({expectedRevision:1});expect(adapter.readPending().data).toBeNull();
+    expect(gateway.save.mock.calls[1][1]).toEqual({expectedRevision:1});expect((await adapter.readPending()).data).toBeNull();
   });
   it("refuses unknown and non-monotonic revisions before a write",async()=>{
     const client={from:vi.fn()};const gateway=new SupabaseStateGateway({client,userId:"a"});
@@ -84,7 +84,7 @@ describe("cloud conflict recovery",()=>{
     expect(other.repository.getState().projects).toHaveLength(0);
     first.connectivity.online=true;await first.adapter.flush();
     other.eventTarget.dispatch("storage",{key:first.adapter.keys.pending,newValue:null});
-    expect(other.repository.getState().projects[0].name).toBe("Shared tab");
+    await vi.waitFor(()=>expect(other.repository.getState().projects[0]?.name).toBe("Shared tab"));
     expect(other.adapter.remoteRevision).toBe(1);
   });
 });

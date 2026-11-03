@@ -9,7 +9,7 @@ export function dockerLocal(args,options={}) {
   const result=spawnSync('docker',['--context','desktop-linux',...args],{encoding:'utf8',timeout:20000,maxBuffer:8e6,...options});
   // Do not echo stderr/arguments: Docker may include configuration credentials.
   if(result.error?.code==='ETIMEDOUT')throw Error('Docker Linux no responde en 20 segundos. No se reinició ningún servicio.');
-  if(result.error||result.status!==0)throw Error('Falló una operación del entorno Docker local; no se usó ningún destino cloud.');
+  if(result.error||result.status!==0){const sqlError=args.includes('psql')?String(result.stderr||'').split('\n').find(line=>line.startsWith('ERROR:'))?.slice(0,240):null;throw Error(`Falló Docker local (${args[0]}, salida ${result.status??result.error?.code}); no se usó ningún destino cloud.${sqlError?' '+sqlError:''}`);}
   return result.stdout;
 }
 export function planningSources(base=root) {

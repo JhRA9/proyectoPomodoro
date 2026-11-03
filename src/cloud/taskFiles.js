@@ -1,3 +1,4 @@
+import {sha256} from '../utils/integrity.js';
 export const TASK_FILES_BUCKET = "studyhub-task-files";
 export const MAX_TASK_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -81,9 +82,9 @@ export class TaskFileStore {
     return entries;
   }
 
-  async list(taskId) {
+  async list(taskId, { versions = false } = {}) {
     const entries = await this.listEntries(taskId);
-    return Promise.all(entries.map(async (entry) => {
+    const result = await Promise.all(entries.map(async (entry) => {
       const { data: info, error } = await this.bucket.info(this.path(taskId, entry.name));
       if (error) throw storageFailure("No se pudo consultar la información del archivo.", error);
       const metadata = info?.metadata ?? {};
@@ -97,6 +98,10 @@ export class TaskFileStore {
         contentType: info?.content_type ?? info?.contentType ?? metadata.mimetype ?? entry.metadata?.mimetype ?? "application/octet-stream",
       };
     }));
+    if(versions)return result;
+    const latest=new Map();
+    for(const item of result){const name=item.name.normalize('NFC').toLowerCase(),old=latest.get(name);if(!old||String(item.updatedAt)>String(old.updatedAt))latest.set(name,item);}
+    return [...latest.values()];
   }
 
   async upload(taskId, file) {
@@ -132,6 +137,65 @@ export class TaskFileStore {
     if (error) throw storageFailure("No se pudo descargar el archivo.", error);
     if (!(data instanceof Blob)) throw new Error("La descarga no devolvió un archivo válido.");
     return data;
+  }
+
+  // Explicit fidelity-preserving path. Legacy attachments remain readable.
+  pendingOriginals(requestId) {
+    if(!this.storage)return [];
+    const rows=JSON.parse(this.storage.getItem(`studyhub:original-uploads:1:${this.userId}`)||'[]');
+    if(!Array.isArray(rows)||rows.some(row=>row.file?.path!==this.path(row.file?.taskId,row.file?.key)))throw new Error('Registro de originales pendiente inválido. Conserva una copia antes de recuperarlo.');
+    return requestId ? rows.filter(row=>row.requestId===requestId) : rows;
+  }
+
+  recordOriginal(requestId,file,status) {
+    if(!this.storage||!requestId)return;
+    const rows=this.pendingOriginals().filter(row=>!(row.requestId===requestId&&row.file.path===file.path));
+    rows.push({requestId,file,status,at:new Date().toISOString()});
+    this.storage.setItem(`studyhub:original-uploads:1:${this.userId}`,JSON.stringify(rows));
+  }
+
+  acknowledgeOriginals(requestId) {
+    if(this.storage)this.storage.setItem(`studyhub:original-uploads:1:${this.userId}`,JSON.stringify(this.pendingOriginals().filter(row=>row.requestId!==requestId)));
+  }
+
+  async recoverOriginals(requestId) {
+    const recovered=[];
+    const latest=new Map(this.pendingOriginals(requestId).map(row=>[row.file.taskId+'/'+row.file.name.normalize('NFC').toLowerCase(),row]));
+    for(const row of latest.values()) {
+      const file=row.file;await this.downloadOriginal(file);
+      const {data,error}=await this.bucket.info(file.path);if(error)throw storageFailure('Vuelve a seleccionar el original pendiente para recuperarlo.',error);
+      recovered.push({...file,version:data.last_modified??data.lastModified});
+    }
+    return recovered;
+  }
+
+  async uploadOriginal(taskId, file, {requestId} = {}) {
+    const name=assertFile(file);this.folder(taskId);
+    const contentHash=await sha256(file);
+    const key=await sha256(`${normalizedName(name).toLowerCase()}\u0000${contentHash}`);
+    const path=this.path(taskId,key),contentType=file.type||'application/octet-stream';
+    const reference={taskId,key,path,name,sizeBytes:file.size,contentType,sha256:contentHash,representation:'original'};
+    this.recordOriginal(requestId,reference,'uploading');
+    const existing=await this.bucket.info(path);
+    if(existing.error){
+      const {error}=await this.bucket.upload(path,file,{upsert:false,cacheControl:'0',contentType,metadata:{originalName:name,contentHash,immutable:true,representation:'original'}});
+      // A concurrent identical upload can win; verify the bytes before accepting.
+      if(error){const recovered=await this.bucket.info(path);if(recovered.error)throw storageFailure('No se pudo conservar el original.',error);}
+    }
+    const bytes=await this.download(taskId,key);
+    if(bytes.size!==file.size||await sha256(bytes)!==contentHash)throw new Error('El original recibido no coincide. No se vinculó a la entrega.');
+    const {data:info,error}=await this.bucket.info(path);
+    if(error)throw storageFailure('No se pudo confirmar la versión del original.',error);
+    const confirmed={...reference,version:info.last_modified??info.lastModified};
+    this.recordOriginal(requestId,confirmed,'verified');
+    return confirmed;
+  }
+
+  async downloadOriginal(reference) {
+    if(reference.path!==this.path(reference.taskId,reference.key))throw new Error('Referencia de archivo inválida.');
+    const bytes=await this.download(reference.taskId,reference.key,reference.version);
+    if(bytes.size!==reference.sizeBytes||await sha256(bytes)!==reference.sha256)throw new Error('La integridad del original no coincide.');
+    return bytes;
   }
 
   async removeTask(taskId) {

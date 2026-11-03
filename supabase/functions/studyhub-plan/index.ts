@@ -1,3 +1,5 @@
+import {unpackPlanningState} from '../../../src/planning/transport.js';
+import {sha256} from '../../../src/utils/integrity.js';
 import { authenticateRequest } from '../studyhub-evaluate/requestStore.ts';
 import { validateState } from '../../../src/data/schema.js';
 import { validatePlanningTransition, currentContent, canonical } from '../../../src/planning/engine.js';
@@ -17,14 +19,22 @@ Deno.serve(async(request:Request)=>{
     const joined=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){joined.set(chunk,offset);offset+=chunk.length;}
     const body=JSON.parse(new TextDecoder().decode(joined));
     if(!body||Object.keys(body).some(k=>!['state','expectedRevision'].includes(k)))return answer({message:'Solicitud inválida.'},400);
-    validateState(body.state);
+    if(!body.state?.projectPlans?.some((p:any)=>p.transportVersion))validateState(body.state);
     if(body.expectedRevision!==null&&!Number.isSafeInteger(body.expectedRevision))return answer({message:'Revisión inválida.'},400);
     const serverHeaders={apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
     const loaded=await fetch(`${url}/rest/v1/studyhub_states?user_id=eq.${encodeURIComponent(user.id)}&select=state,revision`,{headers:serverHeaders,signal:AbortSignal.timeout(15000)});
     if(!loaded.ok)return answer({message:'No se pudo leer la revisión actual.'},503);
-    const rows=await loaded.json(),previous=rows[0]||null;
+    let rows=await loaded.json();
+    if(rows[0]?.state?.projectPlans?.some((p:any)=>p.externalHistory)){const hydrated=await fetch(`${url}/rest/v1/rpc/studyhub_read_planned_snapshot`,{method:'POST',headers:serverHeaders,body:JSON.stringify({p_owner:user.id}),signal:AbortSignal.timeout(15000)});if(!hydrated.ok)return answer({message:'No se pudo recuperar el historial. No se guardaron cambios.'},503);rows=await hydrated.json();}
+    const previous=rows[0]||null;
+    body.state=await unpackPlanningState(body.state,previous?.state,user.id);
+    validateState(body.state);
     if(previous&&canonical(previous.state)===canonical(body.state))return answer({data:previous});
     if((previous?.revision??null)!==body.expectedRevision)return answer({message:'Hay cambios de otro cliente. Conserva tu copia y reconcilia.',code:'STUDYHUB_CONFLICT'},409);
+    for(const plan of body.state.projectPlans||[]){
+      const imported=plan.events?.[0]?.command;
+      if(imported?.type==='import-history'&&await sha256(canonical(imported.archive))!==imported.sha256)return answer({message:'Hash del archivo de origen inválido.'},422);
+    }
     validatePlanningTransition(previous?.state,body.state,user.id);
     // Only approved file evidence needs proof that the exact private object still exists.
     for(const plan of body.state.projectPlans||[])for(const evidence of currentContent(plan).evidence){
@@ -36,10 +46,29 @@ Deno.serve(async(request:Request)=>{
       const sameVersion=modified===evidence.file.version || (Number.isFinite(Date.parse(modified)) && Date.parse(modified)===Date.parse(evidence.file.version));
       if(!sameVersion)return answer({message:'La versión del adjunto cambió. Registra y verifica la nueva evidencia.'},422);
     }
+    // Shared original versions are checked only when newly linked or newly
+    // approved; unrelated saves do not repeatedly download private documents.
+    const inspected=new Map<string,string>();
+    for(const exercise of body.state.exercises||[])for(const version of exercise.submissionVersions||[]){
+      const old=previous?.state.exercises?.find((x:any)=>x.id===exercise.id)?.submissionVersions?.find((v:any)=>v.id===version.id);
+      if(old)continue;
+      for(const file of version.payload.files||[]){
+        if(!file.path.startsWith(user.id+'/'))return answer({message:'Original de otra cuenta.'},403);
+        const fingerprint=`${file.sha256}:${file.sizeBytes}`;
+        if(inspected.has(file.path)){
+          if(inspected.get(file.path)!==fingerprint)return answer({message:'Metadatos incompatibles para el mismo original.'},422);
+          continue;
+        }
+        inspected.set(file.path,fingerprint);
+        const downloaded=await fetch(`${url}/storage/v1/object/authenticated/studyhub-task-files/${file.path.split('/').map(encodeURIComponent).join('/')}`,{headers:{apikey:key,Authorization:request.headers.get('Authorization')!},signal:AbortSignal.timeout(15000)});
+        if(!downloaded.ok)return answer({message:'No se pudo verificar el original privado.'},422);
+        const blob=await downloaded.blob();if(blob.size!==file.sizeBytes||await sha256(blob)!==file.sha256)return answer({message:'Integridad del original inválida.'},422);
+      }
+    }
     // Server-only CAS prevents a race between the preceding read and the write.
     const saved=await fetch(`${url}/rest/v1/rpc/studyhub_save_planned_snapshot`,{method:'POST',headers:serverHeaders,body:JSON.stringify({p_owner:user.id,p_state:body.state,p_expected_revision:body.expectedRevision}),signal:AbortSignal.timeout(15000)});
     if(!saved.ok)return answer({message:'No se pudo guardar el plan. Conserva tu copia local.'},503);
     const result=await saved.json();if(!result.length)return answer({message:'La revisión cambió; no se sobrescribió.',code:'STUDYHUB_CONFLICT'},409);
     return answer({data:result[0]});
-  }catch(error){return answer({message:error instanceof Error?error.message:'Solicitud inválida.'},(error as any)?.code==='permission_error'?403:400);}
+  }catch(error){return answer({message:error instanceof Error?error.message:'Solicitud inválida.',...((error as any)?.code==='STUDYHUB_CONFLICT'?{code:'STUDYHUB_CONFLICT'}:{})},(error as any)?.code==='STUDYHUB_CONFLICT'?409:(error as any)?.code==='permission_error'?403:400);}
 });

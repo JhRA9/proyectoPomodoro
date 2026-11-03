@@ -1,5 +1,7 @@
+import {PlanningArchiveStore} from './planningArchiveStore.js';
 import { createDemoState, normalizeState } from "./schema.js";
 
+export const PLANNING_STORAGE_KEY="studyhub:planning-storage:2";
 export const STORAGE_KEY = "studyhub:state:1";
 export const BACKUP_KEY = "studyhub:state:1:last-known-good";
 
@@ -27,11 +29,18 @@ export function readStoredState(storage = globalThis.localStorage, primaryKey = 
 }
 
 export class LocalStorageAdapter {
-  constructor(storage = globalThis.localStorage) {
+  constructor(storage = globalThis.localStorage, archive = null) {
     this.storage = storage;
+    this.archiveRevision=null;
+    this.archive = archive || (storage===globalThis.localStorage&&globalThis.indexedDB ? new PlanningArchiveStore() : null);
   }
 
   async load() {
+    if(this.storage?.getItem(PLANNING_STORAGE_KEY)){
+      if(!this.archive)throw new Error("El historial requiere IndexedDB. No se sustituyeron tus datos.");
+      try {const state=await this.archive.load();if(!state)throw new Error('Historial local ausente.');this.archiveRevision=state.revision;return {data:normalizeState(state),isNew:false,recovery:null};}
+      catch(error){const backup=await this.archive.load('backup');if(!backup)throw error;return {data:normalizeState(backup),isNew:false,recovery:'Se recuperó el checkpoint local anterior; conserva una copia antes de continuar.'};}
+    }
     const stored = readStoredState(this.storage);
     if (!stored.exists) return { data: createDemoState(), recovery: null, isNew: true };
     if (stored.data) return { data: stored.data, recovery: stored.recovery, isNew: false };
@@ -39,6 +48,11 @@ export class LocalStorageAdapter {
   }
 
   async save(nextState) {
+    if(this.archive&&(this.storage.getItem(PLANNING_STORAGE_KEY)||nextState.projectPlans?.some(p=>p.modelVersion===2))){
+      await this.archive.save(nextState,this.archiveRevision);
+      this.archiveRevision=nextState.revision;
+      this.storage.setItem(PLANNING_STORAGE_KEY,String(nextState.revision));return;
+    }
     const serialized = JSON.stringify(nextState);
     const previous = this.storage.getItem(STORAGE_KEY);
     try {
@@ -52,6 +66,7 @@ export class LocalStorageAdapter {
   subscribe(listener) {
     if (!globalThis.addEventListener) return () => {};
     const handler = (event) => {
+      if(event.key===PLANNING_STORAGE_KEY&&this.archive){void this.load().then(result=>listener(result.data)).catch(()=>{});return;}
       if (event.key === STORAGE_KEY && event.newValue) {
         try {
           listener(normalizeState(JSON.parse(event.newValue)));

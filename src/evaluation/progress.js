@@ -1,3 +1,4 @@
+import {currentContent,planMetrics} from '../planning/engine.js';
 import { LEVEL_LABELS } from "./constants.js";
 
 export function rubricPercentage(criteria, scores) {
@@ -61,7 +62,7 @@ export function competencyProgress(state, competency) {
 export function studyProjectProgress(state, projectId) {
   const competencies = (state.competencies ?? []).filter((item) => item.projectId === projectId && !item.parentId);
   const allCompetencies = (state.competencies ?? []).filter((item) => item.projectId === projectId);
-  const exercises = (state.exercises ?? []).filter((item) => item.projectId === projectId);
+  const exercises = (state.exercises ?? []).filter((item) => item.projectId === projectId && item.purpose !== "technical");
   const evaluations = (state.evaluations ?? []).filter((item) => item.projectId === projectId && item.status === "completed");
   const scored = evaluations.filter((item) => Number.isFinite(item.percentage));
   const competenceRows = allCompetencies.map((item) => ({ ...item, progress: competencyProgress(state, item) }));
@@ -87,6 +88,12 @@ export function studyProjectProgress(state, projectId) {
 }
 
 export function deliverableProjectProgress(state, projectId) {
+  const plan=state.projectPlans?.find(p=>p.projectId===projectId&&p.catalog?.mode==='plan');
+  if(plan){
+    const content=currentContent(plan),metrics=planMetrics(content),deliverables=content.items.filter(i=>i.kind==='deliverable');
+    return {authority:'plan',rule:'verified-deliverables-v1',advance:metrics.advance,stages:content.items.filter(i=>i.kind==='phase').map(stage=>({...stage,items:deliverables.filter(i=>i.parentId===stage.id),progress:null,weighted:false})),deliverables,verified:metrics.verifiedIds.length,completedUnverified:deliverables.filter(i=>i.status==='completed').length,blocked:deliverables.filter(i=>i.status==='blocked').length,pending:deliverables.filter(i=>['pending','in_progress'].includes(i.status)).length};
+  }
+
   const stages = (state.deliveryStages ?? []).filter((item) => item.projectId === projectId).sort((a, b) => a.order - b.order);
   const deliverables = (state.deliverables ?? []).filter((item) => item.projectId === projectId);
   const stageRows = stages.map((stage) => {
@@ -125,7 +132,9 @@ export function currentWeekSummary(state, projectId, now = new Date()) {
   const taskIds = new Set(state.tasks.filter((item) => item.projectId === projectId).map((item) => item.id));
   const sessions = state.focusSessions.filter((item) => taskIds.has(item.taskId) && inWeek(item.endedAt));
   const evaluations = (state.evaluations ?? []).filter((item) => item.projectId === projectId && item.status === "completed" && inWeek(item.createdAt));
-  const deliverables = (state.deliverables ?? []).filter((item) => item.projectId === projectId && inWeek(item.updatedAt || item.createdAt));
+  const plan=state.projectPlans?.find(p=>p.projectId===projectId&&p.catalog?.mode==='plan');
+  const changedIds=new Set((plan?.events||[]).filter(e=>inWeek(e.at)).flatMap(e=>[e.command.itemId,...(e.command.selectedIds||[]).flatMap(id=>plan.proposals.find(p=>p.id===e.command.proposalId)?.operations.filter(op=>op.id===id).map(op=>op.targetId)||[])].filter(Boolean)));
+  const deliverables = plan?currentContent(plan).items.filter(i=>i.kind==='deliverable'&&changedIds.has(i.id)):(state.deliverables ?? []).filter((item) => item.projectId === projectId && inWeek(item.updatedAt || item.createdAt));
   const dateKey = (value) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   return {
     start: dateKey(start),

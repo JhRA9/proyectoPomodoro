@@ -1,5 +1,8 @@
+import {sha256} from '../utils/integrity.js';
+import {saveDelivery,projectWeekFacts,validateDeliveryTransition} from '../planning/deliveries.js';
+import {categoryCommand} from './categories.js';
 import { createId } from "../utils/id.js";
-import { executePlan, validatePlanningTransition } from "../planning/engine.js";
+import { executePlan, validatePlanningTransition, canonical } from "../planning/engine.js";
 import { cleanMultilineText, cleanText, normalizeForSearch } from "../utils/text.js";
 import { normalizeLearningImages } from "../utils/learningImages.js";
 import { isDailyRecurringTask, isRecurringOccurrenceCompleted, isRecurringTaskActiveOn } from "../utils/recurrence.js";
@@ -90,6 +93,28 @@ export class StudyHubRepository {
 
   destroy() { this.unsubscribeExternal(); }
   getState() { return this.store.getState(); }
+
+  async saveDelivery(projectId, input, actor = "local") {
+    return this.commit(state => {
+      const result=saveDelivery(state,projectId,input,actor,this.clock().toISOString());
+      if(input.exerciseId&&!result.replayed)state.projectPlans=state.projectPlans.map(plan=>plan.projectId!==projectId?plan:executePlan(plan,{id:createId('event'),type:'shared-evidence-changed',expectedRevision:plan.revision,exerciseId:input.exerciseId,reason:'Nueva versión de entrega; revisar las verificaciones asociadas'},state,actor,this.clock().toISOString()));
+      return result;
+    });
+  }
+
+  async saveWeeklyReview(projectId,input,actor="local") {
+    return this.commit(state=>{
+      const project=state.projects.find(p=>p.id===projectId);
+      if(!project||!String(input.worked||'').trim())throw new Error('Escribe tu balance de la semana.');
+      const end=toLocalDateKey(this.clock()),start=toLocalDateKey(new Date(this.clock().getTime()-6*86400000));
+      const review={id:createId('weekly'),date:this.clock().toISOString(),actor,worked:String(input.worked).trim().slice(0,5000),improve:String(input.improve||'').slice(0,5000),facts:projectWeekFacts(state,projectId,start,end)};
+      (project.weeklyReviews??=[]).push(review);return review;
+    });
+  }
+
+  async categoryCommand(command, actor = "local") {
+    return this.commit(state => categoryCommand(state, command, actor, this.clock().toISOString()));
+  }
 
   async planCommand(projectId, command, actor = "local") {
     return this.commit((state) => {
@@ -271,7 +296,8 @@ export class StudyHubRepository {
       projectId,
       title,
       description: cleanText(input.description, 500),
-      category: cleanText(input.category, 60),
+      category: this.getState().categories?.find(c=>c.id===input.categoryId)?.name || cleanText(input.category, 60),
+      categoryId: input.categoryId || null,
       status: TASK_STATUSES.includes(input.status) ? input.status : "pending",
       dueDate: recurrence ? null : input.dueDate || null,
       dueTime: recurrence ? null : normalizeDueTime(input.dueDate, input.dueTime),
@@ -292,7 +318,8 @@ export class StudyHubRepository {
       if (!title) throw new Error("Escribe un nombre para la tarea.");
       task.title = title;
       task.description = cleanText(input.description, 500);
-      task.category = cleanText(input.category, 60);
+      task.categoryId = input.categoryId || null;
+      task.category = state.categories?.find(c=>c.id===task.categoryId)?.name || cleanText(input.category, 60);
       task.recurrence = normalizeRecurrenceInput(input, task.recurrence);
       task.dueDate = task.recurrence ? null : input.dueDate || null;
       task.dueTime = task.recurrence ? null : normalizeDueTime(input.dueDate, input.dueTime);
@@ -305,6 +332,7 @@ export class StudyHubRepository {
 
   async deleteTask(taskId, actor = "local") {
     return this.commit((state) => {
+      const removed=state.tasks.find(t=>t.id===taskId);
       if (state.activeTimer?.taskId === taskId) state.activeTimer = null;
       state.tasks = state.tasks.filter((task) => task.id !== taskId);
       state.focusSessions = state.focusSessions.filter((session) => session.taskId !== taskId);
@@ -312,7 +340,7 @@ export class StudyHubRepository {
       state.projectPlans = (state.projectPlans || []).map(plan => {
         const content = plan.versions.at(-1).content;
         if (!content.items.some(i => i.taskId === taskId) && !content.evidence.some(e => e.file?.taskId === taskId)) return plan;
-        return executePlan(plan, { id:createId("plan-event"),type:"task-removed",taskId,expectedRevision:plan.revision }, state, actor, this.clock().toISOString());
+        return executePlan(plan, { id:createId("plan-event"),type:"task-removed",taskId,tombstone:removed?{id:removed.id,title:removed.title,projectId:removed.projectId}:null,expectedRevision:plan.revision }, state, actor, this.clock().toISOString());
       });
       if (state.pendingCompletion?.taskId === taskId) state.pendingCompletion = null;
     });
@@ -678,6 +706,7 @@ export class StudyHubRepository {
   async deleteCompetency(competencyId) {
     return this.commit((state) => {
       if (state.exercises.some((item) => item.competencyIds.includes(competencyId)) || state.evaluations.some((item) => item.competencyIds.includes(competencyId))) throw new Error("Esta competencia ya tiene ejercicios o evaluaciones y forma parte del historial.");
+      if(state.projectPlans?.some(p=>p.versions.at(-1).content.items.some(i=>i.competencyId===competencyId)))throw new Error("La competencia está vinculada al plan. Retira primero la relación mediante una propuesta.");
       const children = new Set(state.competencies.filter((item) => item.parentId === competencyId).map((item) => item.id));
       state.competencies = state.competencies.filter((item) => item.id !== competencyId && !children.has(item.id));
     });
@@ -728,10 +757,13 @@ export class StudyHubRepository {
     return evidence;
   }
 
-  async deleteEvidence(evidenceId) {
+  async deleteEvidence(evidenceId,actor="local") {
     return this.commit((state) => {
       if (!state.evidence.some((item) => item.id === evidenceId)) throw new Error("La evidencia ya no existe.");
+      const removed=state.evidence.find(e=>e.id===evidenceId);
+      if(removed?.submissionId)(state.evidenceTombstones??=[]).push({...structuredClone(removed),removedAt:this.clock().toISOString(),removedBy:actor});
       state.evidence = state.evidence.filter((item) => item.id !== evidenceId);
+      state.projectPlans=state.projectPlans.map(plan=>!plan.versions.at(-1).content.evidence.some(e=>e.sharedEvidenceId===evidenceId)?plan:executePlan(plan,{id:createId("event"),type:"shared-evidence-removed",expectedRevision:plan.revision,evidenceId},state,actor,this.clock().toISOString()));
     });
   }
 
@@ -739,6 +771,7 @@ export class StudyHubRepository {
     const state = this.getState();
     const exercise = state.exercises.find((item) => item.id === exerciseId);
     if (!exercise) throw new Error("El ejercicio ya no existe.");
+    if(exercise.purpose==="technical")throw new Error("Esta entrega es técnica; registra una versión académica o mixta antes de evaluarla.");
     const project = state.projects.find((item) => item.id === exercise.projectId);
     const rubric = structuredClone(project.evaluationConfig.rubric);
     const scores = rubric.criteria.map((criterion) => { const raw = input[`score_${criterion.id}`]; return { criterionId: criterion.id, score: raw === "" || raw == null ? NaN : Number(raw), justification: cleanMultilineText(input[`justification_${criterion.id}`], 1000) }; });
@@ -807,7 +840,12 @@ export class StudyHubRepository {
     return this.commit((state) => state.aiRequests.push({ id: createId("ai-request"), projectId, evaluationId: null, provider: details.provider, model: details.model || null, profile: details.profile || null, createdAt: this.clock().toISOString(), latencyMs: details.latencyMs ?? null, inputTokens: null, outputTokens: null, reasoningTokens: null, neurons: null, status: "failed", error: cleanText(details.error, 500) }));
   }
 
+  assertLegacyCatalog(projectId) {
+    if (this.getState().projectPlans?.some(p=>p.projectId===projectId&&p.catalog?.mode==="plan")) throw new Error("Los entregables de este proyecto se editan en Plan. El catálogo anterior es un archivo histórico.");
+  }
+
   async createDeliveryStage(projectId, input) {
+    this.assertLegacyCatalog(projectId);
     const stage = { id: createId("stage"), projectId, title: cleanText(input.title, 120), description: cleanMultilineText(input.description, 800), order: this.getState().deliveryStages.filter((item) => item.projectId === projectId).length, createdAt: this.clock().toISOString() };
     if (!stage.title) throw new Error("Escribe un nombre para la etapa.");
     await this.commit((state) => state.deliveryStages.push(stage));
@@ -815,6 +853,7 @@ export class StudyHubRepository {
   }
 
   async createDeliverable(projectId, input) {
+    this.assertLegacyCatalog(projectId);
     const deliverable = { id: createId("deliverable"), projectId, stageId: input.stageId, title: cleanText(input.title, 160), description: cleanMultilineText(input.description, 1200), status: DELIVERABLE_STATUSES.includes(input.status) ? input.status : "pending", dependencyIds: Array.isArray(input.dependencyIds) ? [...new Set(input.dependencyIds)] : [], blockingReason: cleanMultilineText(input.blockingReason, 800), weight: input.weight ? Number(input.weight) : null, dueDate: input.dueDate || null, verifiedAt: input.status === "verified" ? this.clock().toISOString() : null, createdAt: this.clock().toISOString(), updatedAt: this.clock().toISOString() };
     if (!deliverable.title) throw new Error("Escribe un nombre para el entregable.");
     await this.commit((state) => {
@@ -830,6 +869,7 @@ export class StudyHubRepository {
     return this.commit((state) => {
       const item = state.deliverables.find((candidate) => candidate.id === deliverableId);
       if (!item) throw new Error("El entregable ya no existe.");
+      this.assertLegacyCatalog(item.projectId);
       const dependenciesReady = item.dependencyIds.every((id) => state.deliverables.find((candidate) => candidate.id === id)?.status === "verified");
       if (["completed_unverified", "verified"].includes(status) && !dependenciesReady) throw new Error("Verifica primero las dependencias de este entregable.");
       item.status = status;
@@ -866,8 +906,18 @@ export class StudyHubRepository {
     this.store.setState(next);
   }
 
-  async replaceFromMigration(candidate) {
+  async replaceFromMigration(candidate, {confirmPlanning=false} = {}) {
     const next = prepareImportedState(candidate, this.clock());
+    if(this.adapter.userId&&next.projectPlans.length&&confirmPlanning){
+      if(this.getState().projects.length)throw new Error("La migración inicial requiere una cuenta vacía. No se sobrescriben proyectos existentes.");
+      if(next.exercises.some(x=>(x.files||[]).length)||next.projectPlans.some(p=>p.versions.at(-1).content.evidence.some(e=>e.file)))throw new Error("Esta copia referencia archivos privados. Conserva el archivo y reconcilia su propietario antes de importar; no se simula su transferencia.");
+      const imported=[];
+      for(const archive of next.projectPlans){
+        const hash=await sha256(canonical(archive));
+        imported.push(executePlan(null,{id:'import-'+archive.id,type:'import-history',projectId:archive.projectId,archive,sha256:hash,confirm:true},next,this.adapter.userId,this.clock().toISOString()));
+      }
+      next.projectPlans=imported;
+    }
     // Preserve local attribution. Importing an archive is not evidence that the
     // authenticated account performed the historical actions.
     if (this.adapter.userId) validatePlanningTransition(this.getState(), next, this.adapter.userId);

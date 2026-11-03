@@ -98,7 +98,7 @@ describe('evidence-based project planning',()=>{
     const f=planningFixture();f.add('items',f.item('piece',{taskId:'synthetic-task'}));const repo=new StudyHubRepository({adapter:new MemoryAdapter(f.state),store:createStore(null)});await repo.initialize();await repo.deleteTask('synthetic-task');expect(currentContent(repo.getState().projectPlans[0]).items[0].taskId).toBeNull();expect(repo.getState().projectPlans[0].events.at(-1).type).toBe('task-removed');
   });
   it('renders escaped source text, labels, disabled cloud and no invented percentage',()=>{
-    const f=planningFixture();const html=planningView(f.state,{...f.state.projects[0],name:'<script>unsafe</script>'},{},{cloud:true,cloudReady:false});expect(html).not.toContain('<script>');expect(html).toContain('Sin estimar');expect(html).toContain('falta instalar');expect(html).toContain('aria-label="Apartados del plan"');
+    const f=planningFixture();const html=planningView(f.state,{...f.state.projects[0],name:'<script>unsafe</script>'},{},{cloud:true,cloudReady:false});expect(html).not.toContain('<script>');expect(html).toContain('Sin calcular');expect(html).toContain('falta instalar');expect(html).toContain('aria-label="Apartados del plan"');
   });
   it('requires new evidence review when acceptance criteria change, even with the same criterion ID',()=>{
     const f=planningFixture();f.add('items',f.item());f.verify();const p=f.propose([f.op('items','edit','piece',{...content(f).items[0],status:'correct',verification:null,criteria:[{id:'piece-criterion',text:'Otro umbral'}]})]);

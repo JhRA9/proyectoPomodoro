@@ -187,7 +187,7 @@ export class WorkspaceController {
       "deliverable-status": () => repo.updateDeliverableStatus(form.dataset.deliverableId, data.status, data.blockingReason),
       "ws-resolution": () => resolveAttempt(repo, form.dataset.attemptId, { ...data, actor: app.account?.email || repo.getState().settings.profileName || "Usuario" }),
       "ws-verification": () => verifyEvidence(repo, form.dataset.evidenceId, { ...data, independenceVerified: form.elements.independenceVerified.checked }),
-      "ws-weekly": () => repo.commit((state) => { const project = state.projects.find((p) => p.id === form.dataset.projectId); if (!data.worked.trim()) throw new Error("Escribe tu balance de la semana."); project.weeklyReviews = [...(project.weeklyReviews || []), { date: repo.clock().toISOString(), worked: data.worked.trim().slice(0, 5000), improve: data.improve.trim().slice(0, 5000) }]; }),
+      "ws-weekly": () => repo.saveWeeklyReview(form.dataset.projectId,data,app.account?.id||"local"),
     };
     if (!handlers[form.dataset.form]) return false;
     const success = await app.safely(handlers[form.dataset.form]);

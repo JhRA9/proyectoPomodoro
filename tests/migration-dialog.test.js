@@ -23,7 +23,7 @@ describe("migration dialog actions", () => {
 
     await app.runAction("migrate-local", { dataset: {} });
 
-    expect(repository.replaceFromMigration).toHaveBeenCalledWith(candidate);
+    expect(repository.replaceFromMigration).toHaveBeenCalledWith(candidate, {confirmPlanning:true});
     expect(app.migrationCandidate).toBeNull();
     expect(app.render).toHaveBeenCalledOnce();
     expect(app.addToast).toHaveBeenCalledWith("Tus datos locales se migraron a la nube.");

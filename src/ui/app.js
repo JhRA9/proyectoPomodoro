@@ -1,3 +1,4 @@
+import {originalTaskIds} from '../planning/deliveries.js';
 import { LocalStorageAdapter } from "../data/localAdapter.js";
 import { CloudStorageAdapter, SupabaseStateGateway } from "../data/cloudAdapter.js";
 import { StudyHubRepository } from "../data/repository.js";
@@ -376,7 +377,7 @@ export class StudyHubApp {
 
   async flushTaskFileCleanup() {
     if (!this.fileStore || this.fileCleanupRunning || this.adapter?.getStatus?.().state !== "synced") return;
-    this.fileCleanupRunning = this.fileStore.flushCleanup(this.repository.getState().tasks.map((task) => task.id));
+    this.fileCleanupRunning = this.fileStore.flushCleanup([...this.repository.getState().tasks.map((task) => task.id),...originalTaskIds(this.repository.getState())]);
     try {
       await this.fileCleanupRunning;
     } catch {
@@ -448,7 +449,7 @@ export class StudyHubApp {
       .filter((item) => item.projectId === taskDialogProjectId && item.category)
       .map((item) => [normalizeForSearch(item.category), item.category])).values()]
       .sort((a, b) => a.localeCompare(b, "es"));
-    const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}), availableCategories: availableTaskCategories } : null;
+    const editingTask = this.ui.dialog?.type === "task" ? { ...(storedTask ?? {}), ...(this.ui.dialog.draft ?? {}), availableCategories: availableTaskCategories, categoryCatalog: state.categories || [] } : null;
     const storedLearningEntry = this.ui.dialog?.type === "learning-entry" ? state.learningEntries.find((item) => item.id === this.ui.dialog.id) : null;
     const editingLearningEntry = storedLearningEntry ? { ...storedLearningEntry, ...(this.ui.dialog.draft ?? {}) } : null;
     const editingLearningTask = editingLearningEntry ? state.tasks.find((item) => item.id === editingLearningEntry.taskId) : null;
@@ -702,7 +703,7 @@ export class StudyHubApp {
       case "migrate-local": await this.safely(async () => {
         const candidate = this.migrationCandidate;
         if (!candidate) return;
-        await this.repository.replaceFromMigration(candidate);
+        await this.repository.replaceFromMigration(candidate,{confirmPlanning:true});
         this.migrationCandidate = null;
         this.render();
         this.addToast("Tus datos locales se migraron a la nube.");
@@ -858,7 +859,7 @@ export class StudyHubApp {
     this.root.querySelector?.("#confirm-dialog")?.close?.();
     await this.safely(async () => {
       if (current.type === "delete-project") {
-        const taskIds = this.repository.getState().tasks.filter((task) => task.projectId === current.id).map((task) => task.id);
+        const taskIds = [...new Set([...this.repository.getState().tasks.filter((task) => task.projectId === current.id).map((task) => task.id),...originalTaskIds(this.repository.getState(),current.id)])];
         await this.repository.deleteProject(current.id);
         this.queueTaskFileCleanup(taskIds);
         taskIds.forEach((taskId) => this.clearLearningDraft(taskId));
@@ -877,23 +878,23 @@ export class StudyHubApp {
         if (this.ui.dialog?.type === "learning-entry" && this.ui.dialog.id === current.id) this.ui.dialog = null;
         this.addToast("Aprendizaje eliminado. La sesión y su tiempo se conservaron.");
       } else if (current.type === "delete-evidence") {
-        await this.repository.deleteEvidence(current.id);
+        await this.repository.deleteEvidence(current.id,this.account?.id||"local");
         this.addToast("Evidencia eliminada. El historial de evaluaciones se conserva.");
       } else if (current.type === "import-evaluations") {
         const result = await this.repository.importExternalEvaluations(current.id, this.ui.pendingEvaluationImport);
         this.ui.pendingEvaluationImport = null;
         this.addToast(`${result.imported} ${result.imported === 1 ? "evaluación importada" : "evaluaciones importadas"}.`);
       } else if (current.type === "reset") {
-        const taskIds = this.repository.getState().tasks.map((task) => task.id);
+        const taskIds = [...new Set([...this.repository.getState().tasks.map((task) => task.id),...originalTaskIds(this.repository.getState())])];
         await this.repository.resetAll();
         this.queueTaskFileCleanup(taskIds);
         this.clearAllLearningDrafts();
         this.router.navigate("projects");
         this.addToast("Tu espacio quedó vacío.");
       } else if (current.type === "import") {
-        const previousTaskIds = this.repository.getState().tasks.map((task) => task.id);
+        const previousTaskIds = [...new Set([...this.repository.getState().tasks.map((task) => task.id),...originalTaskIds(this.repository.getState())])];
         await this.repository.importEnvelope(this.ui.pendingImport);
-        const importedTaskIds = new Set(this.repository.getState().tasks.map((task) => task.id));
+        const importedTaskIds = new Set([...this.repository.getState().tasks.map((task) => task.id),...originalTaskIds(this.repository.getState())]);
         this.queueTaskFileCleanup(previousTaskIds.filter((id) => !importedTaskIds.has(id)));
         this.clearAllLearningDrafts();
         this.ui.pendingImport = null;

@@ -1,3 +1,5 @@
+import {validateDeliveries} from '../planning/deliveries.js';
+import {validateCategories} from './categories.js';
 import { addDaysKey, parseLocalDate, toLocalDateKey } from "../utils/time.js";
 import { MAX_LEARNING_IMAGES, isLearningImageDataUrl, normalizeLearningImages } from "../utils/learningImages.js";
 import { AI_PROFILES, AI_PROVIDERS, DEFAULT_RUBRIC, DELIVERABLE_STATUSES, HELP_LEVELS, PRIVACY_MODES, PROJECT_TYPES, VALIDATION_STATES, defaultEvaluationConfig } from "../evaluation/constants.js";
@@ -86,6 +88,8 @@ function isSafeId(value) {
 
 export function validateState(candidate) {
   validatePlans(candidate);
+  validateCategories(candidate);
+  validateDeliveries(candidate);
   assert(candidate && typeof candidate === "object", "La copia no contiene datos válidos.");
   assert(candidate.schemaVersion === SCHEMA_VERSION, `Versión de datos no compatible (${candidate.schemaVersion ?? "desconocida"}).`);
   assert(Array.isArray(candidate.projects) && Array.isArray(candidate.tasks), "Faltan proyectos o tareas.");

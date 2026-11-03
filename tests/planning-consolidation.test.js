@@ -81,7 +81,7 @@ describe('planning consolidation and preservation',()=>{
     expect(currentContent(f.state.projectPlans[0]).items.map(i=>i.status)).toEqual(['correct','correct']);expect(planMetrics(currentContent(f.state.projectPlans[0])).advance).toBe(0);expect(f.state.projectPlans[0].versions.slice(0,historic.length)).toEqual(historic);
   });
   it('does not blend incompatible legacy partial progress and evidence-based progress',()=>{
-    const f=planningFixture();f.state.deliveryStages=[{id:'stage',projectId:'synthetic-cube',title:'Antes',order:0}];f.state.deliverables=[{id:'old',projectId:'synthetic-cube',stageId:'stage',status:'in_progress',weight:2}];f.add('items',f.item());
+    const f=planningFixture();f.add('items',f.item());f.state.deliveryStages=[{id:'stage',projectId:'synthetic-cube',title:'Antes',order:0}];f.state.deliverables=[{id:'old',projectId:'synthetic-cube',stageId:'stage',status:'in_progress',weight:2}];expect(()=>f.add('items',f.item('other'))).toThrow(/Adopta/);
     expect(deliverableProjectProgress(f.state,'synthetic-cube').stages[0].progress).toBe(35);expect(planMetrics(currentContent(f.state.projectPlans[0])).advance).toBe(0);
     expect(planningView(f.state,f.state.projects[0],{})).toContain('No se suman ni se sincronizan');expect(f.state.deliverables[0].status).toBe('in_progress');
   });

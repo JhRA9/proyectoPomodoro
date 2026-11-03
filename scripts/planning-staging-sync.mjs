@@ -6,11 +6,11 @@ import {MemoryStorage,FakeEventTarget} from '../tests/helpers/cloudHarness.js';
 import {canonical,currentContent} from '../src/planning/engine.js';
 
 export async function verifyPlanningSync(client,secondClient,owner,edge) {
-  const contexts=[],checks=[];
+  const contexts=[],checks=[],runId=crypto.randomUUID();
   const context=async(sdk,storage=new MemoryStorage())=>{
     // SDK Auth/PostgREST and the production gateway/adapter/repository are real.
     // Only the function URL is redirected to the isolated loopback Edge Runtime.
-    const localClient={from:(...args)=>sdk.from(...args),functions:{invoke:async(name,{body})=>{
+    const localClient={from:(...args)=>sdk.from(...args),rpc:(...args)=>sdk.rpc(...args),functions:{invoke:async(name,{body})=>{
       assert.equal(name,'studyhub-plan');
       const {data}=await sdk.auth.getSession();
       const response=await fetch(edge,{method:'POST',headers:{Authorization:`Bearer ${data.session.access_token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -23,13 +23,13 @@ export async function verifyPlanningSync(client,secondClient,owner,edge) {
   };
   try {
     const a=await context(client),b=await context(secondClient);
-    const before=a.repo.getState().projectPlans[0],command=(id,status)=>({id,type:'status',expectedRevision:before.revision,itemId:'piece',status,reason:'Cliente sintético'});
+    const before=a.repo.getState().projectPlans[0],command=(id,status)=>({id:id+'-'+runId,type:'status',expectedRevision:before.revision,itemId:'piece',status,reason:'Cliente sintético'});
     await a.repo.planCommand('synthetic-cube',command('real-client-a','in_progress'),owner);
     assert.equal(a.adapter.getStatus().state,'synced');
     b.connectivity.online=false;
     await b.repo.planCommand('synthetic-cube',command('real-client-b','pending'),owner);
     const local=canonical(b.repo.getState().projectPlans);
-    assert.ok(b.adapter.readPending().data);checks.push('Cola offline del plan con repositorio real');
+    assert.ok((await b.adapter.readPending()).data);checks.push('Cola offline del plan con repositorio real');
     const reloaded=await context(secondClient,b.storage);
     assert.equal(reloaded.adapter.getStatus().state,'conflict');assert.equal(canonical(reloaded.repo.getState().projectPlans),local);
     assert.equal(currentContent(a.repo.getState().projectPlans[0]).items[0].status,'in_progress');checks.push('Recarga conserva conflicto y no sobrescribe otra sesión');
@@ -37,6 +37,13 @@ export async function verifyPlanningSync(client,secondClient,owner,edge) {
     assert.ok([...b.storage.values.keys()].some(key=>key.startsWith(reloaded.adapter.keys.conflictBackup+':')));assert.equal(currentContent(recovered.projectPlans[0]).items[0].status,'in_progress');checks.push('Recuperación explícita conserva copia divergente');
     const p=recovered.projectPlans[0];await reloaded.repo.planCommand('synthetic-cube',{...command('real-client-reconciled','completed'),expectedRevision:p.revision},owner);
     await a.repo.syncNow();assert.equal(canonical(a.repo.getState().projectPlans),canonical(reloaded.repo.getState().projectPlans));checks.push('Segundo cliente recibe plan e historial reconciliados');
+    if(p.modelVersion===2){
+      const latest=a.repo.getState().projectPlans[0];a.connectivity.online=false;
+      await a.repo.planCommand('synthetic-cube',{...command('uncontested-reload','pending'),expectedRevision:latest.revision},owner);
+      const resumed=await context(client,a.storage);
+      assert.equal(resumed.adapter.getStatus().state,'synced');assert.equal(currentContent(resumed.repo.getState().projectPlans[0]).items[0].status,'pending');
+      checks.push('Cola v2 recuperada tras recarga sin conflicto espurio');
+    }
     return checks;
   }finally{for(const {repo} of contexts)repo.destroy();}
 }

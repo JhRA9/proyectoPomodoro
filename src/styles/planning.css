@@ -33,3 +33,12 @@
 
 .plan-page a { display:inline-flex; align-items:center; min-height:44px; min-width:44px; overflow-wrap:anywhere; }
 .plan-page button { min-width:44px; }
+.plan-main-gauge { display:flex; justify-content:center; margin:24px 0; }
+.plan-main-gauge .ws-gauge { max-width:400px; width:100%; }
+.plan-tree-scroll { overflow:auto; max-height:620px; border:1px solid var(--border,#294057); border-radius:12px; touch-action:pan-x pan-y; }
+.plan-tree-canvas { position:relative; transform-origin:top left; }
+.plan-tree-canvas svg { position:absolute; inset:0; }
+.plan-tree-node { position:absolute; width:224px; background:var(--panel,#102033); border:1px solid #35485e; border-radius:10px; padding:6px; }
+.plan-tree-node.selected { border-color:#88d1c6; }
+.plan-tree-node button { width:100%; text-align:left; white-space:normal; overflow-wrap:anywhere; min-height:44px; }
+.plan-tree-node small { display:block; font-size:.75rem; color:#afbdd0; margin-top:4px; }

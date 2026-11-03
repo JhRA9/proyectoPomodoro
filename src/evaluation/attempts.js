@@ -62,6 +62,7 @@ export async function beginAttempt(repository, exerciseId, provider, attemptId =
     const exercise = state.exercises.find((x) => x.id === exerciseId);
     const project = state.projects.find((x) => x.id === exercise?.projectId);
     if (!project || !exercise) throw new Error("El ejercicio ya no existe.");
+    if(exercise.purpose==="technical")throw new Error("Esta entrega tiene uso técnico. Registra una versión académica o mixta antes de evaluarla.");
     const signature = evidenceSignature(exercise, project.evaluationConfig.rubric);
     if (attemptId) {
       const existing = state.evaluations.find((x) => x.id === attemptId && x.targetId === exerciseId);
@@ -120,6 +121,7 @@ export async function recordManualAttempt(repository, exerciseId, input) {
 }
 
 export async function reviseExercise(repository, exerciseId, input) {
+  if(repository.getState().exercises.find(x=>x.id===exerciseId)?.submissionVersions)throw new Error("Esta entrega conserva versiones compartidas. Usa Registrar otra versión en Plan para mantener evidencia y revisiones.");
   return repository.commit((state) => {
     const exercise = state.exercises.find((x) => x.id === exerciseId);
     if (!exercise) throw new Error("El ejercicio ya no existe.");
